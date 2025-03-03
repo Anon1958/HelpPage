@@ -1,0 +1,42 @@
+import win32com.client
+import datetime
+import os
+
+# Dispatch Outlook
+outlook = win32com.client.Dispatch("Outlook.Application")
+namespace = outlook.GetNamespace("MAPI")
+
+# Access main Inbox
+inbox = namespace.GetDefaultFolder(6)  # 6 = Inbox
+
+# 1) Print top 5 subjects
+print("-- TOP 5 SUBJECTS --")
+for i, msg in enumerate(inbox.Items, start=1):
+    print(f"{i}. {msg.Subject}")
+    if i == 5:
+        break
+
+# 2) Filter messages from last 7 days
+date_since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%m/%d/%Y')
+filtered = inbox.Items.Restrict(f"[ReceivedTime] >= '{date_since}'")
+print(f"\nMessages since {date_since}: {filtered.Count}")
+
+# 3) Save attachments from filtered messages
+save_folder = r"C:\MyOutlookAttachments"
+os.makedirs(save_folder, exist_ok=True)
+
+for msg in filtered:
+    if msg.Attachments.Count > 0:
+        subject_safe = msg.Subject.replace(':','_').replace('\\','_').replace('/','_')
+        for att in msg.Attachments:
+            filename = f"{subject_safe}__{att.FileName}"
+            att.SaveASFile(os.path.join(save_folder, filename))
+            print("Saved attachment:", filename)
+
+# 4) Send a test email (comment out if not needed)
+# new_mail = outlook.CreateItem(0)
+# new_mail.To = "myname@company.com"
+# new_mail.Subject = "Automated Test"
+# new_mail.Body = "This is a test email sent via Python & Outlook COM."
+# new_mail.Send()
+# print("Test email sent!")
