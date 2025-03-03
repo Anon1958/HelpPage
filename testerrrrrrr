@@ -1,1 +1,4 @@
 =AVERAGEIFS(PivotRates,PivotDates,">=" & DATE(YEAR($C$57),MONTH($C$57),1),PivotDates,"<=" & DATE(YEAR($C$57),MONTH($C$57)+1,0))
+
+
+=AVERAGEIFS(PivotRates,PivotDates,">=" & DATE(YEAR($C57),MONTH($C57),1),PivotDates,"<=" & DATE(YEAR($C57),MONTH($C57)+1,0))
