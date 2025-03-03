@@ -7,3 +7,6 @@
   PivotDates, ">=" & EOMONTH($C$57, -1) + 1,
   PivotDates, "<=" & EOMONTH($C$57, 0)
 )
+
+
+=AVERAGEIFS(PivotRates,PivotDates,">=" & EOMONTH($C$57,-1)+1,PivotDates,"<=" & EOMONTH($C$57,0))
