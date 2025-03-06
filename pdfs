@@ -1,0 +1,21 @@
+import os
+import PyPDF2
+
+folder_path = r"C:\Path\To\PDFs"  # Folder containing PDF files
+output_file = "merged.pdf"        # Name of the merged output
+
+# Create a merger object
+merger = PyPDF2.PdfFileMerger()
+
+# Loop through the folder, appending each PDF
+for filename in sorted(os.listdir(folder_path)):
+    if filename.lower().endswith(".pdf"):
+        pdf_path = os.path.join(folder_path, filename)
+        merger.append(pdf_path)
+
+# Write out the merged file
+output_path = os.path.join(folder_path, output_file)
+merger.write(output_path)
+merger.close()
+
+print(f"Merged PDF saved to: {output_path}")
