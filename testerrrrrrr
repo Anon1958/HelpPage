@@ -2,3 +2,42 @@
 
 
 =AVERAGEIFS(PivotRates,PivotDates,">=" & DATE(YEAR($C57),MONTH($C57),1),PivotDates,"<=" & DATE(YEAR($C57),MONTH($C57)+1,0))
+
+
+from playwright.sync_api import sync_playwright
+
+# Replace these with your login details and URL
+LOGIN_URL = "https://example.com/login"
+USERNAME = "your_username"
+PASSWORD = "your_password"
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)  # set headless=True to run browser without UI
+    context = browser.new_context()
+    page = context.new_page()
+
+    # Navigate to login page
+    page.goto(LOGIN_URL)
+
+    # Fill in login form fields (Replace selectors with actual selectors from the login page)
+    page.fill('input[name="username"]', USERNAME)
+    page.fill('input[name="password"]', PASSWORD)
+
+    # Click login button (Replace with the actual selector)
+    page.click('button[type="submit"]')
+
+    # Optional: wait for navigation or some specific element after login
+    page.wait_for_load_state('networkidle')
+
+    # Confirm login was successful (adjust selector as needed)
+    if page.is_visible("text=Logout"):
+        print("Login successful!")
+    else:
+        print("Login failed.")
+
+# Close playwright
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)
+    page = browser.new_page()
+    page.goto(LOGIN_URL)
+    browser.close()
