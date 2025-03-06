@@ -19,3 +19,22 @@ merger.write(output_path)
 merger.close()
 
 print(f"Merged PDF saved to: {output_path}")
+
+
+import os
+import PyPDF2
+
+folder_path = "."  # Same directory as the .ipynb file
+output_file = "merged.pdf"
+
+merger = PyPDF2.PdfFileMerger()
+
+for filename in sorted(os.listdir(folder_path)):
+    if filename.lower().endswith(".pdf"):
+        pdf_path = os.path.join(folder_path, filename)
+        merger.append(pdf_path)
+
+merger.write(output_file)
+merger.close()
+
+print(f"Merged PDF saved to: {output_file}")
