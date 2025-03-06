@@ -1,0 +1,70 @@
+import os
+import PyPDF2
+
+folder_path = r"C:\Path\To\PDFs"  # Folder containing PDF files
+output_file = "merged.pdf"        # Name of the merged output
+
+# Create a merger object
+merger = PyPDF2.PdfFileMerger()
+
+# Loop through the folder, appending each PDF
+for filename in sorted(os.listdir(folder_path)):
+    if filename.lower().endswith(".pdf"):
+        pdf_path = os.path.join(folder_path, filename)
+        merger.append(pdf_path)
+
+# Write out the merged file
+output_path = os.path.join(folder_path, output_file)
+merger.write(output_path)
+merger.close()
+
+print(f"Merged PDF saved to: {output_path}")
+
+
+import os
+import PyPDF2
+
+folder_path = "."  # Same directory as the .ipynb file
+output_file = "merged.pdf"
+
+merger = PyPDF2.PdfFileMerger()
+
+for filename in sorted(os.listdir(folder_path)):
+    if filename.lower().endswith(".pdf"):
+        pdf_path = os.path.join(folder_path, filename)
+        merger.append(pdf_path)
+
+merger.write(output_file)
+merger.close()
+
+print(f"Merged PDF saved to: {output_file}")
+
+
+
+
+# If you haven't already installed pdfplumber, uncomment and run the next line:
+# !pip install pdfplumber
+
+import pdfplumber
+import csv
+
+pdf_path = "merged.pdf"  # PDF file in the current directory
+csv_path = "output.csv"  # Output CSV file
+
+with pdfplumber.open(pdf_path) as pdf, open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
+    csv_writer = csv.writer(csvfile)
+    for page in pdf.pages:
+        # Attempt to extract a table from the page
+        table = page.extract_table()
+        if table:
+            for row in table:
+                csv_writer.writerow(row)
+        else:
+            # If no table is found, extract text and write each line as a row
+            text = page.extract_text()
+            if text:
+                lines = text.split('\n')
+                for line in lines:
+                    csv_writer.writerow([line])
+                    
+print(f"CSV file saved to: {csv_path}")
