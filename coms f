@@ -1,0 +1,40 @@
+import win32com.client
+import os
+
+# Connect to Outlook
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+
+# Access the Inbox and subfolder "INTRAFI"
+inbox = outlook.GetDefaultFolder(6)  # Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+
+# Retrieve emails sorted by newest first
+messages = intrafi_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+sender_email = "indoperations@intrafi.com"
+latest_email = None
+
+# Find the most recent email from the specific sender
+for message in messages:
+    if message.SenderEmailAddress.lower() == sender_email:
+        latest_email = message
+        break
+
+# If no matching email is found, raise an error
+if latest_email is None:
+    raise Exception(f"No email found from {sender_email}")
+
+# Define and ensure the save directory exists
+save_directory = r"C:\Users\iams395\FP&A"
+os.makedirs(save_directory, exist_ok=True)
+
+# Save the first PDF attachment from the email
+for attachment in latest_email.Attachments:
+    if attachment.FileName.lower().endswith(".pdf"):
+        file_path = os.path.join(save_directory, attachment.FileName)
+        attachment.SaveAsFile(file_path)
+        print(f"Attachment saved to {file_path}")
+        break
+else:
+    print("No PDF attachment found in the latest email.")
