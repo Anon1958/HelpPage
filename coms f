@@ -38,3 +38,39 @@ for attachment in latest_email.Attachments:
         break
 else:
     print("No PDF attachment found in the latest email.")
+    
+    -----
+    
+    # Import necessary libraries
+import os
+import fitz  # PyMuPDF for PDF reading
+import pandas as pd
+from openpyxl import load_workbook
+
+# -----------------------
+# Amendable File Paths:
+# -----------------------
+
+# PDF file saved from previous step:
+pdf_file_path = r"C:\Users\iams395\FP&A\your_downloaded_file.pdf"  # Update PDF filename if needed
+
+# Excel file (destination) path:
+excel_file_path = r"C:\Path\To\Your\FP&A\excel_workbook.xlsx"
+
+# Excel sheet to update/write to
+excel_sheet_name = 'IND_DAILY_BANK_RECAP'
+
+# -----------------------
+# PDF Reading:
+# -----------------------
+
+# Open and read PDF content
+pdf_text = ""
+with fitz.open(pdf_file) as pdf:
+    for page in pdf:
+        pdf_text += page.get_text()
+
+# -----------------------
+# (Initial) Data Preparation:
+# -----------------------
+# This is a simple
