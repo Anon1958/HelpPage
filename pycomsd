@@ -73,3 +73,52 @@ else:
     df.to_excel(excel_file, sheet_name=sheet_name, index=False)
 
 print(f"Data written successfully to {excel_file}")
+
+
+
+-------
+import win32com.client
+import os
+
+# Define your constants clearly here:
+SENDER_EMAIL = "indoperations@intrafi.com"
+SAVE_FOLDER = r"C:\Users\iams395\FP&A"
+outlook_folder_name = "INTRAFI"  # Folder inside Inbox
+
+# Connect to Outlook application
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+
+# Access your specific inbox subfolder (named "INTRAFI")
+inbox = outlook.GetDefaultFolder(6)  # 6 corresponds to Inbox
+intrafi_folder = inbox.Folders[outlook_subfolder := "INTRAFI"]
+
+# Sort emails by most recent first
+messages = intrafi_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+latest_email = None
+sender_email = "indoperations@intrafi.com"
+
+# Find the most recent email from the specified sender
+for message in messages:
+    if message.SenderEmailAddress.lower() == sender_email := "indoperations@intrafi.com":
+        latest_email = message
+        break  # Exit once the most recent matching email is found
+else:
+    raise Exception(f"No email from {sender_email} found.")
+
+# Directory to save PDF
+save_directory = r"C:\Users\iams395\FP&A"
+
+# Create directory if it doesn't exist
+os.makedirs(save_directory, exist_ok=True)
+
+# Save first PDF attachment found
+for attachment in latest_email.Attachments:
+    if attachment.FileName.lower().endswith('.pdf'):
+        file_path = os.path.join(save_directory, attachment.FileName)
+        attachment.SaveAsFile(file_path)
+        print(f"Attachment saved to {file_path}")
+        break  # Only save the first PDF attachment
+else:
+    print("No PDF attachment found in the latest email.")
