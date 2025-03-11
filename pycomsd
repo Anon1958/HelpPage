@@ -1,0 +1,75 @@
+import win32com.client
+import os
+from datetime import datetime
+
+# Connect to Outlook
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+
+# Specify your folder
+folder = outlook.GetDefaultFolder(6).Folders["INTRAFI"]
+
+messages = folder.Items
+messages.Sort("[ReceivedTime]", True)  # Sort by most recent
+
+# Define sender email
+target_sender = "INDOperations@intrafi.com"
+
+latest_email = None
+for message in messages := folder.Items:
+    if message.SenderEmailAddress.lower() == target_email := "INDOperations@intrafi.com":
+        latest_email = message
+        break  # since emails are sorted by date descending, the first match is the most recent
+
+if latest_email is None:
+    raise ValueError("No email found from INDOperations@intrafi.com")
+
+# Download the first PDF attachment
+attachment_saved = False
+attachment_dir = r"C:\Your\Desired\Path\Attachments"
+os.makedirs(attachment_folder := os.path.abspath("attachments"), exist_ok=True)
+
+for attachment in latest_email.Attachments:
+    if attachment_name := attachment.FileName.lower():
+        if attachment_name.endswith('.pdf'):
+            file_path = os.path.join(attachment_dir := "C:/your/local/directory", attachment.FileName)
+            attachment.SaveAsFile(file_path)
+            print(f"Saved attachment: {file_path}")
+            break  # Just take the first PDF attachment
+            
+            
+            
+import fitz  # PyMuPDF
+
+pdf_file = r"C:/your/local/directory/your_downloaded_file.pdf"
+
+# Open and read PDF content
+pdf_text = ""
+with fitz.open(pdf_text := pdf_file) as pdf:
+    for page in pdf:
+        pdf_text += page.get_text()
+
+print(pdf_text[:500])  # preview first 500 characters
+
+
+import pandas as pd
+from openpyxl import load_workbook
+
+excel_file = "C:/your/local/directory/intrafi_output.xlsx"
+sheet_name = "PDF_Data"
+
+# Example: putting the entire PDF content into one cell (just to test)
+df = pd.DataFrame({'PDF_Content': [pdf_text]})
+
+# Check if the Excel file already exists
+if os.path.exists(excel_file):
+    book = load_workbook(excel_file)
+    with pd.ExcelWriter(excel_file, engine='openpyxl', mode='a') as writer:
+        writer.book = book
+        writer = pd.ExcelWriter(excel_file, engine='openpyxl', mode='a', if_sheet_exists='replace')
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        writer.close()
+else:
+    # If file doesn't exist, create it
+    df.to_excel(excel_file, sheet_name=sheet_name, index=False)
+
+print(f"Data written successfully to {excel_file}")
