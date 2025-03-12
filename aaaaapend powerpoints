@@ -38,3 +38,38 @@ for i, row in df.iterrows():
 
 # Save the updated presentation
 prs.save("output.pptx")
+
+
+------
+import os
+import datetime
+from openpyxl import load_workbook
+
+# Path to your PDF file scraped from the email
+pdf_path = "path/to/your/file.pdf"
+
+# Get the file's last modified timestamp
+timestamp = os.path.getmtime(pdf_path)
+
+# Convert the timestamp to a datetime object and extract only the date
+modified_date = datetime.datetime.fromtimestamp(timestamp).date()
+# Format the date as desired (for example, YYYY-MM-DD)
+date_str = modified_date.strftime("%Y-%m-%d")
+
+# Load your Utilization workbook (adjust the filename as needed)
+workbook_path = "utilization.xlsx"
+wb = load_workbook(workbook_path)
+
+# Select the "Utilization" sheet
+ws = wb["Utilization"]
+
+# Get the existing value in cell I4 (if any) and append the new date
+existing_value = ws["I4"].value
+if existing_value:
+    # Append new date to the existing text, separated by a comma
+    ws["I4"].value = f"{existing_value}, {date_str}"
+else:
+    ws["I4"].value = date_str
+
+# Save the workbook
+wb.save(workbook_path)
