@@ -217,3 +217,46 @@ print("Email sent successfully.")
 
 
 
+----------
+
+
+import pandas as pd
+from openpyxl import Workbook
+
+# Create a new workbook and remove the default sheet
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+# Loop through each email content (the keys in email_contents are the sheet names)
+for sheet_name, html_content in email_contents.items():
+    # Try extracting tables from the HTML content
+    try:
+        tables = pd.read_html(html_content)
+    except Exception as e:
+        tables = []  # If parsing fails, no tables were found
+
+    # Decide what to write to the sheet based on whether tables were found
+    if tables:
+        # If one or more tables are found, combine them or choose one
+        # Here, we concatenate all tables vertically (you can adjust this if needed)
+        df = pd.concat(tables, ignore_index=True)
+    else:
+        # Fallback: if no table is found, split the text into lines
+        # and write each line to its own row in a single column.
+        lines = html_content.splitlines()
+        df = pd.DataFrame({'Content': lines})
+
+    # Create a new sheet with the given sheet_name
+    ws = wb.create_sheet(title=sheet_name)
+
+    # Write the DataFrame to the worksheet
+    # (We iterate over rows and columns to insert cell by cell)
+    for row_index, row in df.iterrows():
+        for col_index, value in enumerate(row, start=1):
+            ws.cell(row=row_index + 1, column=col_index, value=value)
+
+# Define the output Excel file path (update as needed)
+output_excel_path = r"C:\Users\iams395\FP&A\EmailContents.xlsx"
+wb.save(output_excel_path)
+print(f"Workbook saved to: {output_excel_path}")
