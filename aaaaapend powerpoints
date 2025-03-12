@@ -119,3 +119,101 @@ ws[target_excel_cell] = datetime.fromtimestamp(timestamp).date()
 wb.save(excel_file_path)
 
 print(f"Date '{datetime.fromtimestamp(timestamp).date()}' written to '{sheet_name}' sheet, cell {target_excel_cell} successfully.")
+
+
+
+-----
+import os
+import win32com.client
+from datetime import datetime
+from openpyxl import Workbook
+
+# ------------------------------
+# Step 1: Define target email subjects
+# ------------------------------
+target_subjects = [
+    "RBC - FDIC Insured Sweep - Correspondent Accts",
+    "RBC -FDIC Insured Sweep - Direct Accounts",
+    "RBC - Uninsured Deposit Sweep",
+    "RBC - FDIC Insured Sweep"
+]
+
+# This dictionary will map sheet names (derived from subject) to email body text.
+email_contents = {}
+
+# ------------------------------
+# Step 2: Connect to Outlook and access the target folder
+# ------------------------------
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+
+# Get the Inbox (folder 6) and then the "INTRAFI" folder
+inbox = outlook.GetDefaultFolder(6)  # 6 = Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+
+# Now, open the "Indios intrafi 10am" folder inside "INTRAFI"
+target_folder = intrafi_folder.Folders["Indios intrafi 10am"]
+
+# Retrieve emails sorted by ReceivedTime (most recent first)
+messages = target_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+# ------------------------------
+# Step 3: Loop through each target subject and get the most recent email
+# ------------------------------
+for target in target_subjects:
+    found = False
+    for message in messages:
+        # Use .strip() to avoid leading/trailing whitespace issues
+        subject = message.Subject.strip()
+        if subject == target:
+            # Found the most recent email for this target subject
+            # Derive sheet name by removing "RBC -" and stripping extra spaces.
+            sheet_name = subject.replace("RBC -", "").strip()
+            # (Optional) Ensure sheet name is within Excel's 31-character limit:
+            sheet_name = sheet_name[:31]
+            # Store the email body (you can use message.Body or message.HTMLBody)
+            email_contents[sheet_name] = message.Body
+            found = True
+            break  # Stop searching for this target subject once found
+    if not found:
+        print(f"No email found for subject: {target}")
+
+# ------------------------------
+# Step 4: Create a new Excel workbook and write each email’s content to its own sheet
+# ------------------------------
+wb = Workbook()
+# Remove the default sheet created by openpyxl
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for sheet_name, content in email_contents.items():
+    ws = wb.create_sheet(title=sheet_name)
+    # Write the email content into cell A1. (You could adjust this if you need more formatting.)
+    ws["A1"] = content
+
+# Define the output Excel file path (adjust as needed)
+output_excel_path = r"C:\Users\iams395\FP&A\EmailContents.xlsx"
+wb.save(output_excel_path)
+print(f"Workbook saved to: {output_excel_path}")
+
+# ------------------------------
+# Step 5: Create and send an email with the Excel workbook attached
+# ------------------------------
+
+# Define recipients (separate multiple addresses with semicolons)
+recipients = "user1@example.com; user2@example.com"  # <-- Update with actual email addresses
+
+mail = outlook.CreateItem(0)  # 0 represents a MailItem
+mail.To = recipients
+mail.Subject = "Extracted Email Contents"
+mail.Body = "Please find attached the workbook containing the extracted email contents."
+
+# Attach the newly created Excel workbook
+mail.Attachments.Add(output_excel_path)
+
+# Send the email (or use mail.Display() to review before sending)
+mail.Send()
+print("Email sent successfully.")
+
+
+
