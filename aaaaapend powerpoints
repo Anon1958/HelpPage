@@ -73,3 +73,49 @@ else:
 
 # Save the workbook
 wb.save(workbook_path)
+333333333333333333333333
+
+import os
+import pandas as pd
+from openpyxl import load_workbook
+from datetime import datetime
+
+# ------------------------------
+# Amendable Paths and Variables
+# ------------------------------
+
+pdf_file_path = r"C:\Users\iams395\FP&A\your_downloaded_file.pdf"
+excel_file_path = r"C:\Users\iams395\FP&A\3rd Party Banks Script.xlsx"
+excel_sheet_to_update = 'Utilization_Summary'  # Your actual Excel sheet to insert date (if different)
+target_excel_cell = 'I1'  # Change cell location as needed (e.g., 'I1', 'I2', etc.)
+
+# ------------------------------
+# Get modified date from PDF file
+# ------------------------------
+
+# Retrieve the modified timestamp of your PDF file
+timestamp = os.path.getmtime(pdf_file_path)
+
+# Convert timestamp to datetime and format as date only (no time)
+date_modified = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+
+print(f"PDF file modified date: {date_modified}")
+
+# ------------------------------
+# Write date into Excel cell
+# ------------------------------
+
+# Load existing workbook
+wb = load_workbook(excel_file_path)
+
+# Choose the exact worksheet:
+sheet_name = 'IND_DAILY_BANK_RECAP'
+ws = wb[sheet_name]
+
+# Write the date (no time) to the specified cell
+ws[target_excel_cell] = datetime.fromtimestamp(timestamp).date()
+
+# Save workbook
+wb.save(excel_file_path)
+
+print(f"Date '{datetime.fromtimestamp(timestamp).date()}' written to '{sheet_name}' sheet, cell {target_excel_cell} successfully.")
