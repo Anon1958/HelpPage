@@ -1,0 +1,119 @@
+import win32com.client
+import os
+
+# Connect to Outlook
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+
+# Access the Inbox and subfolder "INTRAFI"
+inbox = outlook.GetDefaultFolder(6)  # Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+
+# Retrieve emails sorted by newest first
+messages = intrafi_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+sender_email = "indoperations@intrafi.com"
+latest_email = None
+
+# Find the most recent email from the specific sender
+for message in messages:
+    if message.SenderEmailAddress.lower() == sender_email:
+        latest_email = message
+        break
+
+# If no matching email is found, raise an error
+if latest_email is None:
+    raise Exception(f"No email found from {sender_email}")
+
+# Define and ensure the save directory exists
+save_directory = r"C:\Users\iams395\FP&A"
+os.makedirs(save_directory, exist_ok=True)
+
+# Save the first PDF attachment from the email
+for attachment in latest_email.Attachments:
+    if attachment.FileName.lower().endswith(".pdf"):
+        file_path = os.path.join(save_directory, attachment.FileName)
+        attachment.SaveAsFile(file_path)
+        print(f"Attachment saved to {file_path}")
+        break
+else:
+    print("No PDF attachment found in the latest email.")
+    
+    -----
+    
+    # Import necessary libraries
+import os
+import fitz  # PyMuPDF for PDF reading
+import pandas as pd
+from openpyxl import load_workbook
+
+# -----------------------
+# Amendable File Paths:
+# -----------------------
+
+# PDF file saved from previous step:
+pdf_file_path = r"C:\Users\iams395\FP&A\your_downloaded_file.pdf"  # Update PDF filename if needed
+
+# Excel file (destination) path:
+excel_file_path = r"C:\Path\To\Your\FP&A\excel_workbook.xlsx"
+
+# Excel sheet to update/write to
+excel_sheet_name = 'IND_DAILY_BANK_RECAP'
+
+# -----------------------
+# PDF Reading:
+# -----------------------
+
+# Open and read PDF content
+pdf_text = ""
+with fitz.open(pdf_file) as pdf:
+    for page in pdf:
+        pdf_text += page.get_text()
+
+# -----------------------
+# (Initial) Data Preparation:
+# -----------------------
+# This is a simple
+
+--------
+import os
+import tabula
+import pandas as pd
+
+# -----------------------
+# Editable Paths
+# -----------------------
+
+# Update this PDF filename with your downloaded file:
+pdf_file_path = r"C:\Users\iams395\FP&A\your_downloaded_file.pdf"
+
+# Excel file to update:
+excel_file_path = r"C:\Users\iams395\FP&A\3rd Party Banks Script.xlsx"
+
+# Sheet name within Excel:
+excel_sheet_name = 'IND_DAILY_BANK_RECAP'
+
+# ------------------------
+# Extract tables from PDF:
+# ------------------------
+
+tables = tabula.read_pdf(pdf_file_path, pages='all', multiple_tables=True)
+
+if not tables:
+    raise Exception("No tables found in PDF file!")
+
+# Combine all tables into a single DataFrame:
+combined_df = pd.concat(tables, ignore_index=True)
+
+# Write/update Excel workbook and sheet:
+import os
+import pandas as pd
+from openpyxl import load_workbook
+
+if os.path.exists(excel_file_path):
+    with pd.ExcelWriter(excel_file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        combined_df.to_excel(writer, sheet_name=excel_sheet_name, index=False)
+else:
+    combined_df.to_excel(excel_file_path, sheet_name=excel_sheet_name, index=False)
+
+print(f"Tables successfully imported into '{excel_sheet_name}' sheet in '{excel_file_path}'.")
