@@ -1,0 +1,68 @@
+for msg in messages:
+    if msg.Subject.strip() == target_subject:
+        # We found the email we want
+        html_content = msg.HTMLBody  # make sure you're using HTMLBody, not Body
+
+        # ---------------------
+        # Debug Step: Save HTML to a file for inspection
+        # ---------------------
+        debug_path = r"C:\Users\iams395\FP&A\debug_email.html"
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"Debug HTML written to {debug_path}. Open it to see if it has <table> tags.")
+
+        # Now proceed with your read_html logic or fallback
+        break
+        
+        
+        
+        
+        
+ if msg.Subject.strip() == target_subject:
+    html_content = msg.HTMLBody
+
+    # Debug snippet
+    with open(r"C:\Users\iams395\FP&A\debug_email.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
+    ...
+    
+    
+    
+    
+    try:
+    df_list = pd.read_html(html_content, flavor="lxml")
+    # If multiple tables are found, pick the first or combine them
+    df = pd.concat(df_list, ignore_index=True)
+except ValueError:
+    # No tables found
+    df = None
+    
+    
+    -------
+STEP 3 revised
+
+
+
+ found = False
+for message in messages:
+    subject = message.Subject.strip()
+    if subject == target:
+        sheet_name = subject.replace("RBC -", "").strip()
+        # Instead of storing the plain-text body, store the HTML body
+        html_content = message.HTMLBody
+
+        # Optional Debug: write HTML to a file so you can inspect it
+        debug_path = r"C:\Users\iams395\FP&A\debug_email.html"
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"HTML debug file written to {debug_path}. Open it to see if <table> tags exist.")
+
+        # Store the HTML content in your dictionary
+        email_contents[sheet_name] = html_content
+        found = True
+        break
+
+if not found:
+    print(f"No email found for subject: {target}")
+    
+    
