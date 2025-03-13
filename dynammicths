@@ -1,0 +1,5 @@
+="Your fixed comment text ending on " & TEXT(A1,"mmmm ") & DAY(A1) & IF(OR(DAY(A1)=11,DAY(A1)=12,DAY(A1)=13),"th",CHOOSE(MIN(4,MOD(DAY(A1),10)+1),"st","nd","rd","th")) & " " & TEXT(A1,"yyyy")
+
+
+
+=TEXT(EOMONTH(MAX(inputs!C:C),0),"MMMM d") & "th " & TEXT(EOMONTH(MAX(inputs!C:C),0),"yyyy")
