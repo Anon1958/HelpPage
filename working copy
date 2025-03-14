@@ -15,3 +15,23 @@
 
 
 =INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$2:$Z$2=R9)*('fee-based metrics Tableau'!$A$1:$Z$1=U9), 0))
+m
+
+
+
+xlookup 
+
+=XLOOKUP(1,
+         ('fee-based Metrics Tableau'!$A$1:$ZZ$1 = RIGHT(N9,4)+0) *
+         ('fee-based Metrics Tableau'!$A$2:$ZZ$2 = LEFT(N9, FIND(" ", N9)-1)),
+         'fee-based Metrics Tableau'!$A$8:$ZZ$8)
+         
+         
+         
+         
+         
+ =INDEX('fee-based Metrics Tableau'!$A$8:$ZZ$8,
+       MATCH(1,
+             ('fee-based Metrics Tableau'!$A$1:$ZZ$1 = RIGHT(N9,4)+0) *
+             ('fee-based Metrics Tableau'!$A$2:$ZZ$2 = LEFT(N9, FIND(" ", N9)-1)),
+             0))
