@@ -7,3 +7,8 @@
 =INDEX(PerspectivesRef9:9, MATCH(1, (PerspectivesRef4:4=Email!N5)*(PerspectivesRef5:5=Email!N4), 0))
 
 =HLOOKUP(Email!N5, PerspectivesRef!$A$3:$Z$9, MATCH(Email!N4, PerspectivesRef!$A$4:$A$9, 0), FALSE)
+
+
+
+
+=INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$1:$Z$1 = VALUE(RIGHT(N10,4))) * ('fee-based metrics Tableau'!$A$2:$Z$2 = LEFT(N10, FIND(" ", N10)-1)), 0))
