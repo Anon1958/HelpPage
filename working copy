@@ -2,3 +2,6 @@
 
 
 =INDEX(PerspectivesRef9:9, MATCH(1, (TRIM(PerspectivesRef4:4)=TRIM(Email!N5)) * (TRIM(PerspectivesRef5:5)=TRIM(Email!N4)), 0))
+
+
+=INDEX(PerspectivesRef9:9, MATCH(1, (PerspectivesRef4:4=Email!N5)*(PerspectivesRef5:5=Email!N4), 0))
