@@ -1,0 +1,1 @@
+=INDEX(PerspectivesRef9:9, MATCH(1, (TEXT(PerspectivesRef4:4, "@")=TEXT(Email!N5, "@")) * (TEXT(PerspectivesRef5:5, "@")=TEXT(Email!N4, "@")), 0))
