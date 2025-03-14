@@ -12,3 +12,6 @@
 
 
 =INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$1:$Z$1 = VALUE(RIGHT(N10,4))) * ('fee-based metrics Tableau'!$A$2:$Z$2 = LEFT(N10, FIND(" ", N10)-1)), 0))
+
+
+=INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$2:$Z$2=R9)*('fee-based metrics Tableau'!$A$1:$Z$1=U9), 0))
