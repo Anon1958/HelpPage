@@ -38,3 +38,12 @@
 
 =IFERROR(COLUMN(INDEX($F2:$BQ2,MATCH(TRUE,INDEX(((ISBLANK($F2:$BQ2))+($F2:$BQ2=0))>0,0),0)))-COLUMN($F$2),"")
 =SUMPRODUCT((ISNUMBER($G$2:$G$28137))*($G$2:$G$28137>'Analysis Summary'!$J$64))
+=SUMPRODUCT(
+  --(ABS(IFERROR($G$2:$G$28137,0)) > 'Analysis Summary'!$J$64)
+)
+
+
+
+
+
+=SUMPRODUCT(--(ABS(N(IFERROR($G$2:$G$28137,"")))>'Analysis Summary'!$J$64))
