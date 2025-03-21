@@ -1,0 +1,8 @@
+=IF(ISBLANK(BX2),"",  -- or check for blank if you might have blanks
+ IF(BX2 = 1, "1 month",
+ IF(AND(BX2 >= 2, BX2 <= 6), "2–6 months",
+ IF(AND(BX2 >= 7, BX2 <= 12), "7–12 months",
+ IF(AND(BX2 >= 13, BX2 <= 24), "1–2 years",
+ IF(AND(BX2 >= 25, BX2 <= 36), "2–3 years",
+ IF(AND(BX2 >= 37, BX2 <= 60), "3–5 years",
+ IF(BX2 >= 61, ">5 years",""))))))))
