@@ -28,3 +28,6 @@
 
 
 =IF(OR(ISBLANK($BS2),$BS2=0),"Current",IF($BS2=1,"1 month",IF(AND($BS2>=2,$BS2<=5),"2–5 months",IF(AND($BS2>=6,$BS2<=12),"6–12 months",IF(AND($BS2>=13,$BS2<=24),"1–2 years",IF(AND($BS2>=25,$BS2<=36),"2–3 years",IF(AND($BS2>=37,$BS2<=48),"3–4 years",IF(AND($BS2>=49,$BS2<=60),"4–5 years",IF($BS2>=61,">5 years",""))))))))))
+
+
+=IFERROR(COLUMN(INDEX($F2:$BQ2,MATCH(TRUE,INDEX((ISNUMBER($F2:$BQ2))*($F2:$BQ2<>0)=1,0),0)))-COLUMN($F$2),"")
