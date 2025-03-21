@@ -12,3 +12,8 @@
 
 
 =IF(ISBLANK($BS2),"",IF($BS2=1,"1 month",IF(AND($BS2>=2,$BS2<=6),"2–6 months",IF(AND($BS2>=7,$BS2<=12),"7–12 months",IF(AND($BS2>=13,$BS2<=24),"1–2 years",IF(AND($BS2>=25,$BS2<=36),"2–3 years",IF(AND($BS2>=37,$BS2<=60),"3–5 years",IF($BS2>=61,">5 years","")))))))))
+
+
+
+
+=IF(OR(ISBLANK($BS2),$BS2=0),"Current",IF($BS2=1,"1 month",IF(AND($BS2>=2,$BS2<=6),"2–6 months",IF(AND($BS2>=7,$BS2<=12),"7–12 months",IF(AND($BS2>=13,$BS2<=24),"1–2 years",IF(AND($BS2>=25,$BS2<=36),"2–3 years",IF(AND($BS2>=37,$BS2<=60),"3–5 years",IF($BS2>=61,">5 years","")))))))))
