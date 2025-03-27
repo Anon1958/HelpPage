@@ -30,3 +30,27 @@ except TM1pyException as e:
 
 except Exception as e:
     print(f"Unexpected error: {e}")
+    
+    
+    
+    
+    
+    3/27
+    
+ from TM1py.Services import TM1Service
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+with TM1Service(address="epmtm1.fg.rbc.com",
+                port=8001,  # The port from your IT team's provided code
+                user="3600700957",
+                password="Northern0",
+                namespace="palm",
+                ssl=True,
+                gateway="WM",  # Your specific TM1 instance
+                verify=True) as tm1:
+    
+    # Example: List all cubes available on the server
+    cubes = tm1.cubes.get_all_names()
+    print("Cubes:", cubes)
