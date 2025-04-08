@@ -1,0 +1,17 @@
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
+# Get last full month as current time period
+today = datetime.today()
+first_of_this_month = today.replace(day=1)
+last_month = first_of_this_month - relativedelta(months=1)
+
+# Format current time period
+timeperiod_id_current = last_month.strftime('%Y%m')  # e.g., '202503'
+
+# Get time period 12 months prior
+timeperiod_id_prior = (last_month - relativedelta(months=12)).strftime('%Y%m')  # e.g., '202403'
+
+print("Current Time Period ID:", timeperiod_id_current)
+print("Prior Time Period ID:", timeperiod_id_prior)
+
