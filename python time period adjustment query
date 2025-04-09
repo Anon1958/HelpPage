@@ -15,3 +15,49 @@ timeperiod_id_prior = (last_month - relativedelta(months=12)).strftime('%Y%m')  
 print("Current Time Period ID:", timeperiod_id_current)
 print("Prior Time Period ID:", timeperiod_id_prior)
 
+-—----------
+firm_type_code = "'R'"
+region_filter = "'PCG Other'"
+
+query = f"""
+SELECT Acct.HouseholdKey,
+       SUM(NNA.NNA) AS NNA,
+       SUM(NNA.NAA) AS NAA
+FROM ZZRProd.SSE_V_M_NNAAcctHST AS NNA
+INNER JOIN ZZRProd.SSE_V_M_AcctHistory AS Acct
+  ON Acct.TimePeriod_ID = NNA.TimePeriod_ID
+  AND Acct.ADPAccountNumber = NNA.ADPAccountNumber
+WHERE NNA.TimePeriod_ID >= {timeperiod_id_prior}
+  AND NNA.TimePeriod_ID = {timeperiod_id_current}
+  AND Acct.FirmTypeCode = {firm_type_code}
+  AND Acct.RegionName <> {region_filter}
+GROUP BY Acct.HouseholdKey
+"""
+
+
+------
+timeperiod_id_current = "202503"
+timeperiod_id_prior = "202403"
+
+query = """
+SELECT Acct.HouseholdKey,
+       SUM(NNA.NNA) AS NNA,
+       SUM(NNA.NNA) AS NAA
+FROM ZZRProd.SSE.v_M_NNAAcctHST AS NNA
+INNER JOIN ZZRProd.SSE.v_M_AcctHistory AS Acct
+  ON Acct.ADPAccountNumber = NNA.ADPAccountNumber
+WHERE NNA.TimePeriod_ID >= :timeperiod_id_prior
+  AND NNA.TimePeriod_ID <= :timeperiod_id_current
+  AND Acct.FirmTypeCode = 'R'
+  AND Acct.RegionName <> 'PCG Other'
+GROUP BY Acct.HouseholdKey
+"""
+
+df = pd.read_sql_query(
+    query,
+    engine,
+    params={
+        "timeperiod_id_prior": timeperiod_id_prior,
+        "timeperiod_id_current": timeperiod_id_current
+    }
+)
