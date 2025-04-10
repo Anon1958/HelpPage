@@ -21,3 +21,23 @@ for msg in messages:
             # Process message
     except AttributeError:
         continue
+        
+        
+        ------
+        
+        
+        
+        
+TARGET_SUBJECT = "RBC - FDIC Insured Sweep"
+EXCLUDE_KEYWORDS = ["Direct Accts", "Correspondent Accts"]
+
+for msg in messages:
+    try:
+        subject = msg.Subject.strip()
+        if TARGET_SUBJECT in subject:
+            if any(keyword in subject for keyword in EXCLUDE_KEYWORDS):
+                continue  # Skip emails with "Direct Accts" or "Correspondent Accts"
+            print("This is the one you want:", subject)
+            # process the message here
+    except AttributeError:
+        continue
