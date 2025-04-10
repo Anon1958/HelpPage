@@ -41,3 +41,21 @@ for msg in messages:
             # process the message here
     except AttributeError:
         continue
+        
+        
+        
+        
+        -----
+        
+subject = msg.Subject.strip()
+
+# Fully skip if subject contains any excluded keywords
+if any(keyword in subject for keyword in EXCLUDE_KEYWORDS):
+    continue  # Skip it
+
+# Only continue if subject matches exactly
+if subject != TARGET_SUBJECT:
+    continue  # Not the one we want
+
+# If it gets here, it's a perfect match
+print("MATCHED:", subject) 
