@@ -1,0 +1,175 @@
+import os
+import win32com.client
+import pandas as pd
+from datetime import datetime
+from openpyxl import Workbook
+
+# ------------------------------
+# 1) Configuration
+# ------------------------------
+TARGET_YEAR = 2025
+TARGET_MONTH = 3  # e.g. March
+TARGET_SUBJECT = "RBC - FDIC Insured Sweep"  # Only emails containing this subject
+OUTPUT_PATH = r"C:\Users\iams395\FP&A\RBC_FDIC_Sweep_Mar.xlsx"
+
+# ------------------------------
+# 2) Connect to Outlook
+# ------------------------------
+outlookApp = win32com.client.Dispatch("Outlook.Application")
+outlookNS = outlookApp.GetNamespace("MAPI")
+
+# Access Inbox -> "INTRAFI" -> "Indios intrafi 10am"
+inbox = outlookNS.GetDefaultFolder(6)  # 6 = Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+target_folder = intrafi_folder.Folders["Indios intrafi 10am"]
+
+messages = target_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+# ------------------------------
+# 3) Gather Tables by Date
+#    We'll group DataFrames in a dict: grouped_tables["Mar-01"] = [df1, df2, ...]
+# ------------------------------
+grouped_tables = {}
+
+for msg in messages:
+    received_dt = msg.ReceivedTime
+    
+    # Check if it's from the target year/month
+    if received_dt.year == TARGET_YEAR and received_dt.month == TARGET_MONTH:
+        # Check if subject matches
+        # (You can do an exact match if needed: if msg.Subject.strip() == TARGET_SUBJECT)
+        if TARGET_SUBJECT in msg.Subject:
+            # Convert date to "Mar-01" style
+            date_str = received_dt.strftime("%b-%d")
+            
+            # Parse the HTML body (not the plain text)
+            html_content = msg.HTMLBody
+            
+            # Attempt to extract all HTML tables
+            try:
+                df_list = pd.read_html(html_content, flavor="lxml")
+            except ValueError:
+                # Means no valid <table> found
+                df_list = []
+            
+            # If multiple tables are found, pick the largest to skip disclaimers, footers, etc.
+            if df_list:
+                # Sort DataFrames by number of rows, descending
+                df_list.sort(key=lambda df: len(df), reverse=True)
+                # The first in this sorted list is presumably the "main" RBC table
+                main_df = df_list[0]
+                
+                # Store the main_df in our grouped_tables dict
+                if date_str not in grouped_tables:
+                    grouped_tables[date_str] = []
+                grouped_tables[date_str].append(main_df)
+
+# ------------------------------
+# 4) Write to Excel: One Sheet per Day
+# ------------------------------
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for date_str, list_of_dfs in grouped_tables.items():
+    # Create a sheet named after date_str, e.g. "Mar-01"
+    ws = wb.create_sheet(title=date_str[:31])  # Excel sheet name limit
+    
+    start_row = 1
+    for df in list_of_dfs:
+        # Write this DataFrame to the sheet, row by row
+        for row_index, row_data in df.iterrows():
+            for col_index, value in enumerate(row_data, start=1):
+                ws.cell(row=start_row + row_index + 1, column=col_index, value=value)
+        
+        # Add a blank row after each table
+        start_row += len(df.index) + 2
+
+# ------------------------------
+# 5) Save the Workbook
+# ------------------------------
+wb.save(OUTPUT_PATH)
+print(f"Workbook saved: {OUTPUT_PATH}") no
+
+
+
+--------
+import os
+import win32com.client
+import pandas as pd
+from datetime import datetime
+from openpyxl import Workbook
+
+# ------------------------------
+# 1) Configuration
+# ------------------------------
+TARGET_YEAR = 2025
+TARGET_MONTH = 3  # e.g. March
+TARGET_SUBJECT = "RBC - FDIC Insured Sweep"  # Only emails containing this subject
+OUTPUT_PATH = r"C:\Users\iams395\FP&A\RBC_FDIC_Sweep_Mar.xlsx"
+
+# ------------------------------
+# 2) Connect to Outlook
+# ------------------------------
+outlookApp = win32com.client.Dispatch("Outlook.Application")
+outlookNS = outlookApp.GetNamespace("MAPI")
+
+# Access Inbox -> "INTRAFI" -> "Indios intrafi 10am"
+inbox = outlookNS.GetDefaultFolder(6)  # 6 = Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+target_folder = intrafi_folder.Folders["Indios intrafi 10am"]
+
+messages = target_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+# ------------------------------
+# 3) Gather exactly ONE DataFrame per day
+#    We'll store a single DataFrame in: daily_tables["Mar-01"] = df
+# ------------------------------
+daily_tables = {}
+
+for msg in messages:
+    received_dt = msg.ReceivedTime
+    
+    # Check if it's from the target year/month
+    if received_dt.year == TARGET_YEAR and received_dt.month == TARGET_MONTH:
+        # Check if subject matches
+        if TARGET_SUBJECT in msg.Subject:
+            date_str = received_dt.strftime("%b-%d")  # e.g. "Mar-01"
+            
+            html_content = msg.HTMLBody
+            try:
+                df_list = pd.read_html(html_content, flavor="lxml")
+            except ValueError:
+                df_list = []
+            
+            if df_list:
+                # Sort by row count descending and pick the largest table
+                df_list.sort(key=lambda df: len(df), reverse=True)
+                main_df = df_list[0]
+                
+                # Since there's only 1 RBC email per day, we overwrite if it already exists
+                daily_tables[date_str] = main_df
+
+# ------------------------------
+# 4) Write One Table per Day to Excel
+# ------------------------------
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for date_str, df in daily_tables.items():
+    # Create a sheet named after date_str, e.g. "Mar-01"
+    ws = wb.create_sheet(title=date_str[:31])  # Excel sheet name limit
+
+    # Write DataFrame row by row
+    for row_index, row_data in df.iterrows():
+        for col_index, value in enumerate(row_data, start=1):
+            ws.cell(row=row_index + 1, column=col_index, value=value)
+
+# ------------------------------
+# 5) Save the Workbook
+# ------------------------------
+wb.save(OUTPUT_PATH)
+print(f"Workbook saved: {OUTPUT_PATH}")

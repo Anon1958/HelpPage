@@ -1,0 +1,86 @@
+import os
+import win32com.client
+from openpyxl import Workbook
+import pandas as pd
+from datetime import datetime
+
+# -------------------------
+# CONFIG: Edit as needed
+# -------------------------
+TARGET_YEAR = 2025
+TARGET_MONTH = 3   # e.g., March
+TARGET_SUBJECT = "RBC - FDIC Insured Sweep"
+OUTPUT_PATH = r"C:\Users\iams395\FP&A\RBC_FDIC_Sweep_Mar.xlsx"
+
+# Connect to Outlook Application (NOT the Namespace!)
+outlookApp = win32com.client.Dispatch("Outlook.Application")
+outlookNS = outlookApp.GetNamespace("MAPI")
+
+# Access your Inbox -> "INTRAFI" -> "Indios intrafi 10am" folder
+inbox = outlookNS.GetDefaultFolder(6)  # 6 = Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+target_folder = intrafi_folder.Folders["Indios intrafi 10am"]
+
+# Retrieve emails, sort by most recent first
+messages = target_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+# Dictionary to group DataFrames by day, e.g. grouped_tables["Mar-01"] = [df1, df2, ...]
+grouped_tables = {}
+
+for msg in messages:
+    dt = msg.ReceivedTime
+    # Check if this email is in the target month/year
+    if dt.year == TARGET_YEAR and dt.month == TARGET_MONTH:
+        # Check if the subject matches (you can do .strip(), .lower(), etc. if partial)
+        if TARGET_SUBJECT in msg.Subject:
+            # We found a matching email! Let's parse it.
+
+            # Convert date to "Mar-01"
+            date_str = dt.strftime("%b-%d")
+
+            # Retrieve HTML body (not plain text)
+            html_content = msg.HTMLBody
+
+            # Attempt to read all HTML tables in the email
+            try:
+                df_list = pd.read_html(html_content, flavor="lxml")  # or flavor="html5lib"
+            except ValueError:
+                # Means no <table> found
+                df_list = []
+
+            if df_list:
+                # If we got one or more DataFrames, store them
+                if date_str not in grouped_tables:
+                    grouped_tables[date_str] = []
+                # Add all DataFrames from this email to the list
+                grouped_tables[date_str].extend(df_list)
+
+# ---------------------------------------------------------
+# Create a single Excel workbook, one sheet per date
+# and write all tables for that date
+# ---------------------------------------------------------
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for date_str, list_of_dfs in grouped_tables.items():
+    # Create a new sheet named after date_str, e.g. "Mar-01"
+    ws = wb.create_sheet(title=date_str[:31])  # Excel sheet name limit
+
+    # We'll write each DataFrame below the previous one
+    start_row = 1
+
+    for df in list_of_dfs:
+        # Write this DataFrame to the sheet
+        # (row by row, col by col)
+        for row_index, row_data in df.iterrows():
+            for col_index, value in enumerate(row_data, start=1):
+                ws.cell(row=start_row + row_index + 1, column=col_index, value=value)
+        
+        # After writing one table, add a blank row to separate it from the next
+        start_row += len(df.index) + 2
+
+# Save final workbook
+wb.save(OUTPUT_PATH)
+print(f"Workbook saved: {OUTPUT_PATH}")

@@ -1,0 +1,37 @@
+=INDEX(PerspectivesRef9:9, MATCH(1, (TEXT(PerspectivesRef4:4, "@")=TEXT(Email!N5, "@")) * (TEXT(PerspectivesRef5:5, "@")=TEXT(Email!N4, "@")), 0))
+
+
+=INDEX(PerspectivesRef9:9, MATCH(1, (TRIM(PerspectivesRef4:4)=TRIM(Email!N5)) * (TRIM(PerspectivesRef5:5)=TRIM(Email!N4)), 0))
+
+
+=INDEX(PerspectivesRef9:9, MATCH(1, (PerspectivesRef4:4=Email!N5)*(PerspectivesRef5:5=Email!N4), 0))
+
+=HLOOKUP(Email!N5, PerspectivesRef!$A$3:$Z$9, MATCH(Email!N4, PerspectivesRef!$A$4:$A$9, 0), FALSE)
+
+
+
+
+=INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$1:$Z$1 = VALUE(RIGHT(N10,4))) * ('fee-based metrics Tableau'!$A$2:$Z$2 = LEFT(N10, FIND(" ", N10)-1)), 0))
+
+
+=INDEX('fee-based metrics Tableau'!$A$8:$Z$8, MATCH(1, ('fee-based metrics Tableau'!$A$2:$Z$2=R9)*('fee-based metrics Tableau'!$A$1:$Z$1=U9), 0))
+m
+
+
+
+xlookup 
+
+=XLOOKUP(1,
+         ('fee-based Metrics Tableau'!$A$1:$ZZ$1 = RIGHT(N9,4)+0) *
+         ('fee-based Metrics Tableau'!$A$2:$ZZ$2 = LEFT(N9, FIND(" ", N9)-1)),
+         'fee-based Metrics Tableau'!$A$8:$ZZ$8)
+         
+         
+         
+         
+         
+ =INDEX('fee-based Metrics Tableau'!$A$8:$ZZ$8,
+       MATCH(1,
+             ('fee-based Metrics Tableau'!$A$1:$ZZ$1 = RIGHT(N9,4)+0) *
+             ('fee-based Metrics Tableau'!$A$2:$ZZ$2 = LEFT(N9, FIND(" ", N9)-1)),
+             0))

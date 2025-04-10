@@ -1,0 +1,106 @@
+for msg in messages:
+    if msg.Subject.strip() == target_subject:
+        # We found the email we want
+        html_content = msg.HTMLBody  # make sure you're using HTMLBody, not Body
+
+        # ---------------------
+        # Debug Step: Save HTML to a file for inspection
+        # ---------------------
+        debug_path = r"C:\Users\iams395\FP&A\debug_email.html"
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"Debug HTML written to {debug_path}. Open it to see if it has <table> tags.")
+
+        # Now proceed with your read_html logic or fallback
+        break
+        
+        
+        
+        
+        
+ if msg.Subject.strip() == target_subject:
+    html_content = msg.HTMLBody
+
+    # Debug snippet
+    with open(r"C:\Users\iams395\FP&A\debug_email.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
+    ...
+    
+    
+    
+    
+    try:
+    df_list = pd.read_html(html_content, flavor="lxml")
+    # If multiple tables are found, pick the first or combine them
+    df = pd.concat(df_list, ignore_index=True)
+except ValueError:
+    # No tables found
+    df = None
+    
+    
+    -------
+STEP 3 revised
+
+
+
+ found = False
+for message in messages:
+    subject = message.Subject.strip()
+    if subject == target:
+        sheet_name = subject.replace("RBC -", "").strip()
+        # Instead of storing the plain-text body, store the HTML body
+        html_content = message.HTMLBody
+
+        # Optional Debug: write HTML to a file so you can inspect it
+        debug_path = r"C:\Users\iams395\FP&A\debug_email.html"
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"HTML debug file written to {debug_path}. Open it to see if <table> tags exist.")
+
+        # Store the HTML content in your dictionary
+        email_contents[sheet_name] = html_content
+        found = True
+        break
+
+if not found:
+    print(f"No email found for subject: {target}")
+    
+    
+    
+ import pandas as pd
+from openpyxl import Workbook
+
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for sheet_name, html_content in email_contents.items():
+    # Try reading tables from the HTML
+    try:
+        df_list = pd.read_html(html_content, flavor="lxml")  # or "html5lib"
+    except ValueError:
+        # If no tables are found, pd.read_html raises ValueError
+        df_list = []
+
+    if df_list:
+        # Combine all found tables (or pick the first one if you prefer)
+        df = pd.concat(df_list, ignore_index=True)
+    else:
+        # Fallback: No <table> tags found. 
+        # Just store the raw HTML or convert <br> / </p> to newlines, etc.
+        # Example: line-based approach
+        df = pd.DataFrame({'Content': [html_content]})
+
+    # Now create a sheet
+    ws = wb.create_sheet(title=sheet_name[:31])  # Excel name limit
+
+    # Write df to Excel, row by row
+    for row_index, row_data in df.iterrows():
+        for col_index, value in enumerate(row_data, start=1):
+            ws.cell(row=row_index + 1, column=col_index, value=value)
+
+# Finally, save the workbook
+output_excel_path = r"C:\Users\iams395\FP&A\EmailContents.xlsx"
+wb.save(output_excel_path)
+print(f"Workbook saved to: {output_excel_path}")
+    

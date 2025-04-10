@@ -1,0 +1,143 @@
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
+# Get last full month as current time period
+today = datetime.today()
+first_of_this_month = today.replace(day=1)
+last_month = first_of_this_month - relativedelta(months=1)
+
+# Format current time period
+timeperiod_id_current = last_month.strftime('%Y%m')  # e.g., '202503'
+
+# Get time period 12 months prior
+timeperiod_id_prior = (last_month - relativedelta(months=12)).strftime('%Y%m')  # e.g., '202403'
+
+print("Current Time Period ID:", timeperiod_id_current)
+print("Prior Time Period ID:", timeperiod_id_prior)
+
+-—----------
+firm_type_code = "'R'"
+region_filter = "'PCG Other'"
+
+query = f"""
+SELECT Acct.HouseholdKey,
+       SUM(NNA.NNA) AS NNA,
+       SUM(NNA.NAA) AS NAA
+FROM ZZRProd.SSE_V_M_NNAAcctHST AS NNA
+INNER JOIN ZZRProd.SSE_V_M_AcctHistory AS Acct
+  ON Acct.TimePeriod_ID = NNA.TimePeriod_ID
+  AND Acct.ADPAccountNumber = NNA.ADPAccountNumber
+WHERE NNA.TimePeriod_ID >= {timeperiod_id_prior}
+  AND NNA.TimePeriod_ID = {timeperiod_id_current}
+  AND Acct.FirmTypeCode = {firm_type_code}
+  AND Acct.RegionName <> {region_filter}
+GROUP BY Acct.HouseholdKey
+"""
+
+
+------
+timeperiod_id_current = "202503"
+timeperiod_id_prior = "202403"
+
+query = """
+SELECT Acct.HouseholdKey,
+       SUM(NNA.NNA) AS NNA,
+       SUM(NNA.NNA) AS NAA
+FROM ZZRProd.SSE.v_M_NNAAcctHST AS NNA
+INNER JOIN ZZRProd.SSE.v_M_AcctHistory AS Acct
+  ON Acct.ADPAccountNumber = NNA.ADPAccountNumber
+WHERE NNA.TimePeriod_ID >= :timeperiod_id_prior
+  AND NNA.TimePeriod_ID <= :timeperiod_id_current
+  AND Acct.FirmTypeCode = 'R'
+  AND Acct.RegionName <> 'PCG Other'
+GROUP BY Acct.HouseholdKey
+"""
+
+df = pd.read_sql_query(
+    query,
+    engine,
+    params={
+        "timeperiod_id_prior": timeperiod_id_prior,
+        "timeperiod_id_current": timeperiod_id_current
+    }
+)
+
+
+
+--------
+import os
+import win32com.client
+from openpyxl import Workbook
+import re
+import pandas as pd
+from datetime import datetime
+
+# ------------------------------
+# Editable config
+# ------------------------------
+TARGET_YEAR = 2025
+TARGET_MONTH = 3  # March
+OUTPUT_PATH = r"C:\Users\iams395\FP&A\March_Emails.xlsx"
+
+# Connect to Outlook Application (NOT the Namespace!)
+outlookApp = win32com.client.Dispatch("Outlook.Application")
+outlookNS = outlookApp.GetNamespace("MAPI")
+
+# Access your Inbox -> "INTRAFI" -> "Indios intrafi 10am" folder
+inbox = outlookNS.GetDefaultFolder(6)  # 6 = Inbox
+intrafi_folder = inbox.Folders["INTRAFI"]
+target_folder = intrafi_folder.Folders["Indios intrafi 10am"]
+
+messages = target_folder.Items
+messages.Sort("[ReceivedTime]", Descending=True)
+
+# A dict grouping messages by date (YYYY-MM-DD) 
+# e.g. grouped_emails["2025-03-03"] = [msg1, msg2, ...]
+grouped_emails = {}
+
+for msg in messages:
+    dt = msg.ReceivedTime
+    if dt.year == TARGET_YEAR and dt.month == TARGET_MONTH:
+        # Convert date to "YYYY-MM-DD" string for grouping
+        date_str = dt.strftime("%Y-%m-%d")
+        if date_str not in grouped_emails:
+            grouped_emails[date_str] = []
+        grouped_emails[date_str].append(msg)
+
+# ---------------------------------------------------------
+# Create a single Excel workbook, each date as a separate sheet
+# ---------------------------------------------------------
+wb = Workbook()
+default_sheet = wb.active
+wb.remove(default_sheet)
+
+for date_str, msgs in grouped_emails.items():
+    # Create a new sheet named after the date, truncated to 31 chars
+    sheet_name = date_str  # e.g. "2025-03-03"
+    ws = wb.create_sheet(title=sheet_name[:31])
+    
+    # Optional: Write a header
+    ws.cell(row=1, column=1, value="Subject")
+    ws.cell(row=1, column=2, value="Sender")
+    ws.cell(row=1, column=3, value="ReceivedTime")
+    ws.cell(row=1, column=4, value="Body (Preview)")
+
+    row_index = 2
+    
+    # For each message from that day, add a row in Excel
+    for msg in msgs:
+        # "msg.Body" if you only have plain-text 
+        # "msg.HTMLBody" if you want the HTML
+        # We'll do a preview of the first 100 chars
+        body_preview = msg.Body[:100].replace('\n', ' ')
+
+        ws.cell(row=row_index, column=1, value=msg.Subject)
+        ws.cell(row=row_index, column=2, value=msg.SenderName)
+        ws.cell(row=row_index, column=3, value=str(msg.ReceivedTime))
+        ws.cell(row=row_index, column=4, value=body_preview)
+        
+        row_index += 1
+
+# Save final workbook
+wb.save(OUTPUT_PATH)
+print(f"Workbook saved: {OUTPUT_PATH}")
