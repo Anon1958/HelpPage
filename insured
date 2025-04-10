@@ -1,0 +1,23 @@
+import re
+
+def normalize_subject(subject):
+    # Replace all unicode dash variants with regular dash
+    subject = re.sub(r"[–--−]", "-", subject)
+    # Remove extra spaces and non-breaking spaces
+    subject = subject.replace("\xa0", " ").strip()
+    # Collapse multiple spaces into one
+    subject = re.sub(r"\s+", " ", subject)
+    return subject.lower()
+
+TARGET_SUBJECT = "RBC - FDIC Insured Sweep"
+normalized_target = normalize_subject(TARGET_SUBJECT)
+
+for msg in messages:
+    try:
+        subject = msg.Subject
+        normalized_subject = normalize_subject(subject)
+        if normalized_subject == normalized_target:
+            print("Perfect match:", subject)
+            # Process message
+    except AttributeError:
+        continue
