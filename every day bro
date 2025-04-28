@@ -78,9 +78,118 @@ for date_str, list_of_dfs in grouped_tables.items():
             for col_index, value in enumerate(row_data, start=1):
                 ws.cell(row=start_row + row_index + 1, column=col_index, value=value)
         
-        # After writing one table, add a blank row to separate it from the next
+        # After writing one table, add a blank row to separate it from the next my
+        
+        
         start_row += len(df.index) + 2
 
 # Save final workbook
 wb.save(OUTPUT_PATH)
 print(f"Workbook saved: {OUTPUT_PATH}")
+
+
+
+
+
+--------
+import win32com.client as win32
+import pandas as pd
+import datetime
+import calendar
+
+# NOTE: Ensure pywin32 (for Outlook) and pandas (with lxml) are installed before running.
+# Connect to Outlook and get the MAPI namespace
+outlook = win32.Dispatch("Outlook.Application")
+namespace = outlook.GetNamespace("MAPI")
+
+# Open the Inbox folder (folder code 6 is Inbox) [oai_citation_attribution:0‡medium.com](https://medium.com/@balakrishna0106/automating-outlook-effortless-email-retrieval-using-pythons-win32com-client-796b13746ad9#:~:text=,GetDefaultFolder%286) and then navigate to "INTRAFI/Indops intrafi 10am" [oai_citation_attribution:1‡stackoverflow.com](https://stackoverflow.com/questions/40849742/outlook-using-python-win32com-to-iterate-subfolders#:~:text=Like%20my%20folder%20hierarchy%20is,Important)
+inbox = namespace.GetDefaultFolder(6)  # 6 refers to the Inbox folder in Outlook MAPI
+folder = inbox.Folders["INTRAFI"].Folders["Indops intrafi 10am"]
+
+# Retrieve all email items from the target folder
+items = folder.Items
+
+# Define filter criteria
+TARGET_YEAR = 2025
+TARGET_MONTH = 3
+target_subject = "RBC - FDIC Insured Sweep"
+
+# Prepare a dictionary to store DataFrames for each date (keyed by date string like 'Mar-01')
+data_frames_by_date = {}
+
+# Loop through each item (email) in the folder and apply the filters
+for mail in items:
+    # Only consider MailItem objects (skip if not an email)
+    try:
+        subject = mail.Subject or ""
+    except Exception:
+        continue
+
+    # Normalize subject by replacing en-dash, em-dash, etc. with a standard hyphen
+    normalized_subject = subject
+    for dash in ["\u2013", "\u2014", "\u2212"]:
+        normalized_subject = normalized_subject.replace(dash, "-")
+    normalized_subject = normalized_subject.strip()
+
+    # Check if subject exactly matches the target (and ignore similar subjects with extra text)
+    if normalized_subject != target_subject:
+        continue
+    # Further ignore if any unwanted keywords are present (just a safety net)
+    subj_lower = normalized_subject.lower()
+    if any(word in subj_lower for word in ["direct acct", "correspondent acct", "uninsured"]):
+        continue
+
+    # Check the email's date (ReceivedTime) against target year and month
+    try:
+        received_time = mail.ReceivedTime  # COM datetime object
+    except Exception:
+        continue
+    if received_time.year != TARGET_YEAR or received_time.month != TARGET_MONTH:
+        continue
+
+    # At this point, we have a valid email. Extract its HTML body.
+    html_body = mail.HTMLBody
+    if not html_body:
+        continue
+
+    # Parse all HTML tables in the email body into DataFrames using pandas [oai_citation_attribution:2‡pbpython.com](https://pbpython.com/pandas-html-table.html#:~:text=The%20pandas%20read_html,use%20them%20for%20further%20numeric%C2%A0analysis)
+    try:
+        tables = pd.read_html(html_body, flavor='lxml')
+    except Exception as e:
+        # If lxml parser fails (e.g., malformed HTML), try an alternative parser
+        try:
+            tables = pd.read_html(html_body)  # use default (which may be html5lib or bs4)
+        except Exception:
+            continue  # skip this email if no parser can read the HTML
+
+    if not tables or len(tables) == 0:
+        continue
+
+    # Assume the first table is the relevant one (one main table per matching email)
+    df = tables[0]
+
+    # Create a key like 'Mar-01' from the email's date
+    day = received_time.day
+    month_abbr = calendar.month_abbr[received_time.month]  # e.g., "Mar" for March
+    date_key = f"{month_abbr}-{day:02d}"
+
+    # Store the DataFrame in the dictionary (using date string as key)
+    data_frames_by_date[date_key] = df
+
+# After looping through all emails, create an Excel workbook with one sheet per day
+output_path = r"C:\Users\iams395\Reports\Cash Sweep Programs\RBC_FDIC_Sweep_Mar.xlsx"
+with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+    # Write each DataFrame to a separate sheet named by the date (e.g., 'Mar-01')
+    for date_key in sorted(data_frames_by_date.keys()):
+        df = data_frames_by_date[date_key]
+        df.to_excel(writer, sheet_name=date_key, index=False)
+
+# (Optional) Send the resulting Excel file via email using Outlook
+# Uncomment and adjust the following lines to send the email with the attachment:
+# new_mail = outlook.CreateItem(0)  # 0 indicates an Outlook MailItem [oai_citation_attribution:3‡medium.com](https://medium.com/@python-javascript-php-html-css/automating-email-attachments-in-outlook-with-python-a07224047434#:~:text=import%20win32com.client%20outlook%20%3D%20win32com.client.Dispatch%28,Add%28attachment)
+# new_mail.To = "recipient1@example.com; recipient2@example.com"      # Replace with actual recipients
+# new_mail.CC = "cc_recipient@example.com"                           # (Optional) add CC if needed
+# new_mail.Subject = f"RBC - FDIC Insured Sweep Report for March {TARGET_YEAR}"
+# new_mail.Body = "Hello,\n\nPlease find attached the RBC FDIC Sweep report for Mar 2025.\n\nRegards,\nYour Name"
+# new_mail.Attachments.Add(output_path)  # Attach the Excel file [oai_citation_attribution:4‡medium.com](https://medium.com/@python-javascript-php-html-css/automating-email-attachments-in-outlook-with-python-a07224047434#:~:text=import%20win32com.client%20outlook%20%3D%20win32com.client.Dispatch%28,Add%28attachment)
+# new_mail.Send()
