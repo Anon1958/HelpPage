@@ -30,3 +30,13 @@
 
 =LET(rowVals,13:13,lastPos,XMATCH(2,1/(rowVals<>""),0,-1),curr,INDEX(rowVals,lastPos),prevYr,INDEX(rowVals,lastPos-12),IFERROR((curr-prevYr)/prevYr,""))
 =LET(rowVals,13:13,lastPos,XMATCH(2,1/(rowVals<>""),0,-1),curr,INDEX(rowVals,lastPos),prevMo,INDEX(rowVals,lastPos-1),IFERROR((curr-prevMo)/prevMo,""))
+
+
+
+
+=IFERROR(
+        (INDEX($D13:$XFD13,1,COUNTA($D13:$XFD13))-
+         INDEX($D13:$XFD13,1,COUNTA($D13:$XFD13)-1))
+        /
+         INDEX($D13:$XFD13,1,COUNTA($D13:$XFD13)-1),
+"")
