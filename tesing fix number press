@@ -201,3 +201,38 @@ for msg in messages:
 # Save workbook
 excel_writer.save()
 print(f"Written cleaned data to {output_path}")
+
+
+
+import xlwings as xw
+import pandas as pd
+
+# Paths
+source_path = r"Z:\Common\FP&A\Product\Cash Sweep\Cash Sweep Balances\Daily cash & credit balances.xlsx"
+dest_path = r"Z:\Common\FP&A\users\David Brunik\Inputs WMUS Cash Sweep Operating Report.xlsx"
+sheet_name = "Daily Balance"
+
+# Read data from the source workbook using pandas
+df = pd.read_excel(source_path, sheet_name=sheet_name)
+
+# Open Excel in the background without screen flicker
+app = xw.App(visible=False)
+
+try:
+    # Open the destination workbook
+    wb = app.books.open(dest_path)
+    
+    # If sheet already exists, delete it (optional)
+    if sheet_name in [s.name for s in wb.sheets]:
+        wb.sheets[sheet_name].delete()
+    
+    # Add a new sheet and write the data
+    sht = wb.sheets.add(name=sheet_name, after=wb.sheets[-1])
+    sht.range("A1").value = df
+
+    # Save and close the workbook
+    wb.save()
+    wb.close()
+    print(f"'{sheet_name}' sheet written to {dest_path} successfully.")
+finally:
+    app.quit()
