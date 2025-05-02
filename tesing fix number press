@@ -53,3 +53,78 @@ for msg in messages:
 
 # Save the Excel file with one sheet per email
 excel_writer.save()
+
+
+
+
+
+import pandas as pd
+import win32com.client
+from bs4 import BeautifulSoup
+
+# Initialize Outlook MAPI
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+inbox   = outlook.GetDefaultFolder(6)  # 6 = Inbox
+messages = inbox.Items
+
+# Path to your output Excel file
+output_path = r"Z:\Common\FP&A\Product\Cash Sweep\Cash Sweep Operating Report\M6 - April 2025\INPUTS\test.xlsx"
+excel_writer = pd.ExcelWriter(output_path, engine='openpyxl')
+
+for msg in messages:
+    # Build a sheet name from the received timestamp
+    try:
+        date_time = msg.ReceivedTime
+    except Exception:
+        continue
+    sheet_name = date_time.strftime('%Y-%m-%d_%H%M%S')
+
+    # Grab the HTML body
+    html_body = msg.HTMLBody
+    if not html_body:
+        continue
+
+    # Parse all tables out of the email body
+    try:
+        tables = pd.read_html(html_body)
+    except ValueError:
+        continue  # no tables in this email
+
+    # Combine and clean all tables for this one email
+    df_combined = pd.DataFrame()
+    for df in tables:
+        # Iterate through each column and attempt smart numeric conversion
+        for col in df.columns:
+            if df[col].dtype == object:
+                raw = df[col].astype(str).str.strip()
+
+                # Remove $ and commas, strip % for numeric attempt
+                cleaned = (raw
+                    .str.replace(r'[\$,]', '', regex=True)
+                    .str.replace('%', '', regex=False)
+                )
+
+                # Convert to numeric, coercing errors → NaN
+                numeric = pd.to_numeric(cleaned, errors='coerce')
+
+                # If at least 90% of the column parsed as numbers, keep numeric
+                valid_frac = numeric.notna().mean()
+                if valid_frac >= 0.9:
+                    # If original had percentages, scale them
+                    if raw.str.contains('%').any():
+                        df[col] = numeric / 100.0
+                    else:
+                        df[col] = numeric
+                else:
+                    # Otherwise keep the original text
+                    df[col] = raw
+
+        # Append this cleaned table to the combined DataFrame
+        df_combined = pd.concat([df_combined, df], ignore_index=True)
+
+    # Write to its own sheet
+    df_combined.to_excel(excel_writer, sheet_name=sheet_name, index=False)
+
+# Save the final workbook
+excel_writer.save()
+print(f"Written cleaned data to {output_path}")
