@@ -128,3 +128,76 @@ for msg in messages:
 # Save the final workbook
 excel_writer.save()
 print(f"Written cleaned data to {output_path}")
+
+
+
+
+----
+
+import pandas as pd
+import win32com.client
+from bs4 import BeautifulSoup
+
+# Initialize Outlook MAPI
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+inbox   = outlook.GetDefaultFolder(6)   # 6 = Inbox
+messages = inbox.Items
+
+# Path to your output Excel file
+output_path = (
+    r"Z:\Common\FP&A\Product\Cash Sweep\Cash Sweep Operating Report"
+    r"\M6 - April 2025\INPUTS\test.xlsx"
+)
+excel_writer = pd.ExcelWriter(output_path, engine='openpyxl')
+
+for msg in messages:
+    # Only process actual MailItem objects (Class == 43)
+    if getattr(msg, 'Class', None) != 43:
+        continue
+
+    # Safely grab the HTML body (skip if not present)
+    try:
+        html_body = msg.HTMLBody
+    except AttributeError:
+        continue
+    if not html_body:
+        continue
+
+    # Build sheet name from received timestamp
+    try:
+        date_time = msg.ReceivedTime
+    except Exception:
+        continue
+    sheet_name = date_time.strftime('%Y-%m-%d_%H%M%S')
+
+    # Parse HTML tables
+    try:
+        tables = pd.read_html(html_body)
+    except ValueError:
+        continue  # no tables in this email
+
+    # Combine and clean tables
+    df_combined = pd.DataFrame()
+    for df in tables:
+        for col in df.columns:
+            if df[col].dtype == object:
+                raw = df[col].astype(str).str.strip()
+                cleaned = (
+                    raw
+                    .str.replace(r'[\$,]', '', regex=True)
+                    .str.replace('%', '', regex=False)
+                )
+                numeric = pd.to_numeric(cleaned, errors='coerce')
+                if numeric.notna().mean() >= 0.9:
+                    # scale percentages, otherwise keep numeric
+                    df[col] = (numeric / 100.0) if raw.str.contains('%').any() else numeric
+                else:
+                    df[col] = raw
+        df_combined = pd.concat([df_combined, df], ignore_index=True)
+
+    # Write one worksheet per email
+    df_combined.to_excel(excel_writer, sheet_name=sheet_name, index=False)
+
+# Save workbook
+excel_writer.save()
+print(f"Written cleaned data to {output_path}")
