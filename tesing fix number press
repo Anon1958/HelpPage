@@ -1,0 +1,55 @@
+import pandas as pd
+import win32com.client
+from bs4 import BeautifulSoup
+
+# Initialize Outlook MAPI
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+inbox = outlook.GetDefaultFolder(6)  # 6 = Inbox
+messages = inbox.Items
+
+# Create an Excel writer pointing at your desired file
+output_path = r"Z:\Common\FP&A\Product\Cash Sweep\Cash Sweep Operating Report\M6 - April 2025\INPUTS\test.xlsx"
+excel_writer = pd.ExcelWriter(output_path, engine='openpyxl')
+
+for msg in messages:
+    # Use the email's received date/time as the sheet name
+    try:
+        date_time = msg.ReceivedTime
+    except Exception:
+        continue
+    sheet_name = date_time.strftime('%Y-%m-%d_%H%M%S')
+
+    # Get the HTML body of the email
+    html_body = msg.HTMLBody
+    if not html_body:
+        continue
+
+    # Parse all tables from the HTML into a list of DataFrames
+    try:
+        tables = pd.read_html(html_body)
+    except ValueError:
+        # No tables found in this email
+        continue
+
+    # Combine and clean tables for this email
+    df_combined = pd.DataFrame()
+    for df in tables:
+        # Convert each column as needed
+        for col in df.columns:
+            if df[col].dtype == object:
+                # Remove $ signs and commas
+                df[col] = df[col].replace({'\$': '', ',': ''}, regex=True)
+                # If the column has percent signs, strip % and scale
+                if df[col].str.contains('%').any():
+                    df[col] = df[col].str.rstrip('%').astype(float) / 100.0
+                else:
+                    # Otherwise, convert to numeric if possible
+                    df[col] = pd.to_numeric(df[col], errors='ignore')
+        # Append cleaned table to the combined DataFrame
+        df_combined = pd.concat([df_combined, df], ignore_index=True)
+
+    # Write the cleaned data for this email to its own Excel sheet
+    df_combined.to_excel(excel_writer, sheet_name=sheet_name, index=False)
+
+# Save the Excel file with one sheet per email
+excel_writer.save()
