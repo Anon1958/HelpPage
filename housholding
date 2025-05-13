@@ -414,4 +414,44 @@ ORDER BY
         WHEN '$1M‑$5M'     THEN 6
         WHEN '$5M‑$20M'    THEN 7
         WHEN '$20M+'       THEN 8
-    END;
+
+
+
+/*========================================================
+  RAW DATA EXTRACT
+  • Only ADPAccountNumber values that start with 3
+  • Only the three reporting periods you specified
+  • Returns the three columns you told me you need
+========================================================*/
+SELECT
+    TimePeriod_ID,
+    HouseholdKey,
+    TotalAUA
+    -- , ADPAccountNumber   -- ←‑uncomment if you want to see it too
+FROM [ZZR0Prod].[dbo].[v_M_AcctHistory]
+WHERE TimePeriod_ID IN (202412, 202501, 202503)
+  -- If ADPAccountNumber is VARCHAR/CHAR, use the line below:
+  AND ADPAccountNumber LIKE '3%'
+  
+  -- If ADPAccountNumber is numeric, cast it to text first:
+  -- AND CAST(ADPAccountNumber AS varchar(50)) LIKE '3%'
+;
+/*========================================================
+  RAW DATA EXTRACT
+  • Only ADPAccountNumber values that start with 3
+  • Only the three reporting periods you specified
+  • Returns the three columns you told me you need
+========================================================*/
+SELECT
+    TimePeriod_ID,
+    HouseholdKey,
+    TotalAUA
+    -- , ADPAccountNumber   -- ←‑uncomment if you want to see it too
+FROM [ZZR0Prod].[dbo].[v_M_AcctHistory]
+WHERE TimePeriod_ID IN (202412, 202501, 202503)
+  -- If ADPAccountNumber is VARCHAR/CHAR, use the line below:
+  AND ADPAccountNumber LIKE '3%'
+  
+  -- If ADPAccountNumber is numeric, cast it to text first:
+  -- AND CAST(ADPAccountNumber AS varchar(50)) LIKE '3%'
+;
