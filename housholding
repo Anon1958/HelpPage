@@ -327,3 +327,91 @@ ORDER BY
         WHEN '$20M+'       THEN 8
     END; 
  
+ 
+ /*────────────────────────────────────────────────────────
+ STEP 0  –  Parameters (easy to tweak)
+────────────────────────────────────────────────────────*/
+DECLARE @WantedPeriods TABLE (TimePeriod_ID int PRIMARY KEY);
+INSERT INTO @WantedPeriods (TimePeriod_ID)
+VALUES (202412),(202501),(202503);   -- add / remove periods here
+
+/*────────────────────────────────────────────────────────
+ STEP 1  –  Raw filter
+           •  only wanted periods
+           •  ADPAccountNumber starts with '3'
+           •  non‑NULL HouseholdKey
+────────────────────────────────────────────────────────*/
+WITH Filtered AS (
+    SELECT
+        p.TimePeriod_ID,
+        -- canonical HH key (trim + upper‑case)
+        UPPER(LTRIM(RTRIM(v.HouseholdKey))) AS CleanHH,
+        v.TotalAUA
+    FROM [ZZR0Prod].[dbo].[v_M_AcctHistory] v
+    JOIN @WantedPeriods p
+      ON p.TimePeriod_ID = v.TimePeriod_ID
+    WHERE CAST(v.ADPAccountNumber AS varchar(50)) LIKE '3%'  -- drop CAST if already varchar
+      AND v.HouseholdKey IS NOT NULL
+),
+
+/*────────────────────────────────────────────────────────
+ STEP 2  –  ONE row per (TimePeriod_ID, CleanHH)
+────────────────────────────────────────────────────────*/
+HouseholdTotals AS (
+    SELECT
+        TimePeriod_ID,
+        CleanHH,
+        SUM(TotalAUA) AS TotalAUA
+    FROM Filtered
+    GROUP BY
+        TimePeriod_ID,
+        CleanHH
+),
+
+/*────────────────────────────────────────────────────────
+ STEP 3  –  Assign AUA bracket
+────────────────────────────────────────────────────────*/
+Bracketed AS (
+    SELECT
+        TimePeriod_ID,
+        CleanHH,
+        TotalAUA,
+        CASE
+            WHEN TotalAUA <    0        THEN '<$0'
+            WHEN TotalAUA =    0        THEN '$0'
+            WHEN TotalAUA <=  250000    THEN '$0‑$250K'
+            WHEN TotalAUA <=  500000    THEN '$250K‑$500K'
+            WHEN TotalAUA <= 1000000    THEN '$500K‑$1M'
+            WHEN TotalAUA <= 5000000    THEN '$1M‑$5M'
+            WHEN TotalAUA <= 20000000   THEN '$5M‑$20M'
+            ELSE '$20M+'
+        END AS AUA_Bracket
+    FROM HouseholdTotals
+)
+
+/*────────────────────────────────────────────────────────
+ STEP 4  –  FINAL roll‑up
+           •  DISTINCT household count *inside* each
+             (TimePeriod, Bracket)
+────────────────────────────────────────────────────────*/
+SELECT
+    TimePeriod_ID,
+    AUA_Bracket,
+    COUNT(DISTINCT CleanHH)  AS UniqueHouseholds,   -- ← THE exact per‑period HH count
+    SUM(TotalAUA)            AS BracketTotalAUA
+FROM Bracketed
+GROUP BY
+    TimePeriod_ID,
+    AUA_Bracket
+ORDER BY
+    TimePeriod_ID,
+    CASE AUA_Bracket
+        WHEN '<$0'         THEN 1
+        WHEN '$0'          THEN 2
+        WHEN '$0‑$250K'    THEN 3
+        WHEN '$250K‑$500K' THEN 4
+        WHEN '$500K‑$1M'   THEN 5
+        WHEN '$1M‑$5M'     THEN 6
+        WHEN '$5M‑$20M'    THEN 7
+        WHEN '$20M+'       THEN 8
+    END;
