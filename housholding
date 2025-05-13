@@ -1,0 +1,50 @@
+WITH household_totals AS (
+    SELECT
+        v.TimePeriod_ID,
+        v.HouseholdKey,
+        SUM(v.TotalAUA) AS TotalAUA
+    FROM [ZZR0Prod].[dbo].[v_M_AcctHistory] v
+    /* ←‑‑ keep only the periods you care about */
+    WHERE v.TimePeriod_ID IN (202412, 202501, 202503)
+    GROUP BY
+        v.TimePeriod_ID,
+        v.HouseholdKey
+),
+bucketed AS (
+    SELECT
+        ht.TimePeriod_ID,
+        ht.HouseholdKey,
+        ht.TotalAUA,
+        CASE
+            WHEN ht.TotalAUA  <       0                      THEN '<$0'
+            WHEN ht.TotalAUA  =       0                      THEN '$0'
+            WHEN ht.TotalAUA  >       0  AND ht.TotalAUA <  250000     THEN '$0‑$250K'
+            WHEN ht.TotalAUA >=  250000 AND ht.TotalAUA <  500000     THEN '$250K‑$500K'
+            WHEN ht.TotalAUA >=  500000 AND ht.TotalAUA < 1000000     THEN '$500K‑$1M'
+            WHEN ht.TotalAUA >= 1000000 AND ht.TotalAUA < 5000000     THEN '$1M‑$5M'
+            WHEN ht.TotalAUA >= 5000000 AND ht.TotalAUA < 20000000    THEN '$5M‑$20M'
+            ELSE '$20M+'
+        END AS Segment
+    FROM household_totals ht
+)
+SELECT
+    b.TimePeriod_ID,
+    b.Segment,
+    COUNT(DISTINCT b.HouseholdKey) AS NumHouseholds,
+    SUM(b.TotalAUA)                AS TotalAUA
+FROM bucketed b
+GROUP BY
+    b.TimePeriod_ID,
+    b.Segment
+ORDER BY
+    b.TimePeriod_ID,
+    CASE b.Segment
+        WHEN '<$0'          THEN 1
+        WHEN '$0'           THEN 2
+        WHEN '$0‑$250K'     THEN 3
+        WHEN '$250K‑$500K'  THEN 4
+        WHEN '$500K‑$1M'    THEN 5
+        WHEN '$1M‑$5M'      THEN 6
+        WHEN '$5M‑$20M'     THEN 7
+        WHEN '$20M+'        THEN 8
+    END;
