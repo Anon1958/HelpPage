@@ -48,3 +48,76 @@ ORDER BY
         WHEN '$5M‑$20M'     THEN 7
         WHEN '$20M+'        THEN 8
     END;
+    
+    
+    
+    
+    
+/*=====================================================
+  0)  Set the time‑periods you care about
+=====================================================*/
+DECLARE @Periods TABLE (TimePeriod_ID int PRIMARY KEY);
+INSERT INTO @Periods (TimePeriod_ID)
+VALUES (202412), (202501), (202503);      -- add / remove as needed
+
+/*=====================================================
+  1)  Collapse the raw table to ONE row per household 
+      per period (no duplicates possible after this)
+=====================================================*/
+WITH household_totals AS (
+    SELECT
+        v.TimePeriod_ID,
+        v.HouseholdKey,
+        SUM(v.TotalAUA) AS TotalAUA          -- sum of every account in the HH
+    FROM [ZZR0Prod].[dbo].[v_M_AcctHistory] v
+    JOIN @Periods p  ON p.TimePeriod_ID = v.TimePeriod_ID
+    GROUP BY
+        v.TimePeriod_ID,
+        v.HouseholdKey
+),
+
+/*=====================================================
+  2)  Tag each household with the correct AUA bracket
+=====================================================*/
+bucketed AS (
+    SELECT
+        ht.TimePeriod_ID,
+        ht.HouseholdKey,
+        ht.TotalAUA,
+        CASE
+            WHEN ht.TotalAUA  <       0                      THEN '<$0'
+            WHEN ht.TotalAUA  =       0                      THEN '$0'
+            WHEN ht.TotalAUA  >       0  AND ht.TotalAUA <  250000     THEN '$0‑$250K'
+            WHEN ht.TotalAUA >=  250000 AND ht.TotalAUA <  500000     THEN '$250K‑$500K'
+            WHEN ht.TotalAUA >=  500000 AND ht.TotalAUA < 1000000     THEN '$500K‑$1M'
+            WHEN ht.TotalAUA >= 1000000 AND ht.TotalAUA < 5000000     THEN '$1M‑$5M'
+            WHEN ht.TotalAUA >= 5000000 AND ht.TotalAUA < 20000000    THEN '$5M‑$20M'
+            ELSE '$20M+'
+        END                                               AS Segment
+    FROM household_totals ht
+)
+
+/*=====================================================
+  3)  Final roll‑up – one row per (Period, Segment)
+=====================================================*/
+SELECT
+    b.TimePeriod_ID,
+    b.Segment,
+    COUNT(*)            AS NumHouseholds,    -- each row is already one unique HH
+    SUM(b.TotalAUA)     AS SegmentTotalAUA
+FROM bucketed b
+GROUP BY
+    b.TimePeriod_ID,
+    b.Segment
+ORDER BY
+    b.TimePeriod_ID,
+    CASE b.Segment                      -- keeps brackets in logical order
+        WHEN '<$0'          THEN 1
+        WHEN '$0'           THEN 2
+        WHEN '$0‑$250K'     THEN 3
+        WHEN '$250K‑$500K'  THEN 4
+        WHEN '$500K‑$1M'    THEN 5
+        WHEN '$1M‑$5M'      THEN 6
+        WHEN '$5M‑$20M'     THEN 7
+        WHEN '$20M+'        THEN 8
+    END;
