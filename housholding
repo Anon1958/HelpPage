@@ -121,3 +121,63 @@ ORDER BY
         WHEN '$5M‑$20M'     THEN 7
         WHEN '$20M+'        THEN 8
     END;
+    
+    
+    
+—
+
+
+WITH HouseholdTotals AS (
+    -- Step 1: Aggregate TotalAUA per household for the specified periods
+    SELECT 
+        TimePeriod_ID,
+        HouseholdKey,
+        SUM(TotalAUA) AS TotalAUA
+    FROM [ZZR0Prod].[dbo].[v_M_AcctHistory]
+    WHERE TimePeriod_ID IN (202412, 202501, 202503)
+    GROUP BY 
+        TimePeriod_ID, 
+        HouseholdKey
+),
+BracketedTotals AS (
+    -- Step 2: Assign each household's total to an AUA bracket
+    SELECT
+        HT.TimePeriod_ID,
+        HT.HouseholdKey,
+        HT.TotalAUA,
+        CASE 
+            WHEN HT.TotalAUA < 0 THEN '<$0'
+            WHEN HT.TotalAUA = 0 THEN '$0'
+            WHEN HT.TotalAUA <= 250000 THEN '$0-$250K'
+            WHEN HT.TotalAUA <= 500000 THEN '$250K-$500K'
+            WHEN HT.TotalAUA <= 1000000 THEN '$500K-$1M'
+            WHEN HT.TotalAUA <= 5000000 THEN '$1M-$5M'
+            WHEN HT.TotalAUA <= 20000000 THEN '$5M-$20M'
+            ELSE '$20M+'
+        END AS AUA_Bracket
+    FROM HouseholdTotals AS HT
+)
+-- Step 3: Group by TimePeriod and Bracket, counting households and summing TotalAUA
+SELECT 
+    BT.TimePeriod_ID,
+    BT.AUA_Bracket,
+    COUNT(*) AS HouseholdCount,        -- unique households in this bracket (one row per household in BracketedTotals)
+    SUM(BT.TotalAUA) AS TotalAUA_Sum   -- total AUA for all households in this bracket
+FROM BracketedTotals AS BT
+GROUP BY 
+    BT.TimePeriod_ID, 
+    BT.AUA_Bracket
+-- Step 4: Order by TimePeriod and the custom bracket order
+ORDER BY 
+    BT.TimePeriod_ID,
+    CASE BT.AUA_Bracket
+        WHEN '<$0'       THEN 1
+        WHEN '$0'        THEN 2
+        WHEN '$0-$250K'  THEN 3
+        WHEN '$250K-$500K' THEN 4
+        WHEN '$500K-$1M' THEN 5
+        WHEN '$1M-$5M'   THEN 6
+        WHEN '$5M-$20M'  THEN 7
+        WHEN '$20M+'     THEN 8
+    END;
+ 
