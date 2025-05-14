@@ -1,0 +1,110 @@
+/*─────────────────────────────────────────────────────────────
+  STEP 0  ·  (Optional) Time‑period filter
+─────────────────────────────────────────────────────────────*/
+DECLARE @WantedPeriods TABLE (TimePeriod_ID int PRIMARY KEY);
+-- INSERT INTO @WantedPeriods VALUES (202412),(202501),(202503);   -- add periods if needed
+
+/*─────────────────────────────────────────────────────────────
+  STEP 1  ·  FILTER  (FirmTypeCode='R'  AND  ActiveFlag=1)
+─────────────────────────────────────────────────────────────*/
+WITH Filtered AS (
+    SELECT *
+    FROM [ZZR0Prod].[dbo].[v_M_AcctHistory]
+    WHERE FirmTypeCode = 'R'      -- first Alteryx filter
+      AND ActiveFlag    = 1       -- second Alteryx filter
+      -- AND TimePeriod_ID IN (SELECT TimePeriod_ID FROM @WantedPeriods) -- optional
+),
+
+/*─────────────────────────────────────────────────────────────
+  STEP 2  ·  FORMULA tools
+─────────────────────────────────────────────────────────────*/
+Computed AS (
+    SELECT
+        /* ------ pass‑through keys (keep what you’ll group on) ------ */
+        TimePeriod_ID,
+        HouseholdKey,
+        Rep_ID,
+        BranchName,
+        /* add other dimension columns as required */
+
+        /* === Formula #1  :  calcFeeBasedFlag ================= */
+        CASE 
+            WHEN ManagedAccountFlag = 1 
+                 -- AND ManagedAccountTypeCode = 'XYZ'  -- if your inner IF tested this
+            THEN 1
+            ELSE 0
+        END AS calcFeeBasedFlag,
+
+        /* === Formula #2  :  TotalMFAUA ======================= */
+        TotalMutualFundAUA
+          - (FBSPMoneyMarketFundAUA + FDICMoneyMarketFundAUA)      AS TotalMFAUA,
+
+        /* === Formula #3  :  BrkgMFAUA ======================== */
+        CASE 
+            WHEN calcFeeBasedFlag = 0 
+            THEN TotalMutualFundAUA
+                   - (FBSPMoneyMarketFundAUA + FDICMoneyMarketFundAUA)
+            ELSE 0
+        END                                                         AS BrkgMFAUA,
+
+        /* === Formula #4  :  NumFeeBasedAccts ================= */
+        CASE WHEN calcFeeBasedFlag = 1 THEN 1 ELSE 0 END            AS NumFeeBasedAccts,
+
+        /* === Formula #5  :  MgdFixedAUA ====================== */
+        CASE 
+            WHEN calcFeeBasedFlag = 1 
+            THEN TotalFixedBondAUA 
+            ELSE 0
+        END                                                         AS MgdFixedAUA,
+
+        /* === Formula #6  :  RetMgdAUA ======================== */
+        CASE 
+            WHEN calcFeeBasedFlag = 1 
+                 AND RetirementAccountFlag = 1
+            THEN TotalAUA
+            ELSE 0
+        END                                                         AS RetMgdAUA,
+
+        /* === Formula #7  :  NumRetMgdAccts =================== */
+        CASE 
+            WHEN calcFeeBasedFlag = 1 
+                 AND RetirementAccountFlag = 1
+            THEN 1
+            ELSE 0
+        END                                                         AS NumRetMgdAccts,
+
+        /* === Formula #8  :  TotalMgdAUA ====================== */
+        CASE 
+            WHEN calcFeeBasedFlag = 1 
+            THEN TotalAUA
+            ELSE 0
+        END                                                         AS TotalMgdAUA
+    FROM Filtered
+)
+
+/*─────────────────────────────────────────────────────────────
+  STEP 3  ·  SUMMARIZE  (red Σ tool)
+─────────────────────────────────────────────────────────────*/
+SELECT
+    /* ---- dimensions: keep or remove as needed ---- */
+    -- Rep_ID,
+    -- BranchName,
+    -- TimePeriod_ID,
+
+    /* ---- aggregation results ---- */
+    SUM(TotalMFAUA)       AS Sum_TotalMFAUA,
+    SUM(BrkgMFAUA)        AS Sum_BrkgMFAUA,
+    SUM(NumFeeBasedAccts) AS Sum_NumFeeBasedAccts,
+    SUM(MgdFixedAUA)      AS Sum_MgdFixedAUA,
+    SUM(RetMgdAUA)        AS Sum_RetMgdAUA,
+    SUM(NumRetMgdAccts)   AS Sum_NumRetMgdAccts,
+    SUM(TotalMgdAUA)      AS Sum_TotalMgdAUA
+FROM Computed
+/* ------ UNCOMMENT and edit next line if you need subgroup totals ------ */
+/*
+GROUP BY
+    Rep_ID,
+    BranchName,
+    TimePeriod_ID
+*/
+;
