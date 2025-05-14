@@ -108,3 +108,34 @@ GROUP BY
     TimePeriod_ID
 */
 ;
+
+
+-------------------
+
+
+
+
+
+
+
+/*────────────────────────────────────────────────────────
+ PARAMETERS –‑ change the period(s) you want to analyse
+────────────────────────────────────────────────────────*/
+DECLARE @WantedPeriods TABLE (TimePeriod_ID int PRIMARY KEY);
+INSERT INTO @WantedPeriods (TimePeriod_ID)
+VALUES (202503);          -- <‑‑ put whichever period(s) you need
+
+/*────────────────────────────────────────────────────────
+ RESULT –‑ one number: distinct households that
+           • belong to an account beginning with "3"
+           • have ManagedAccountFlag = '1b'
+           • fall inside the period(s) you specified above
+────────────────────────────────────────────────────────*/
+SELECT
+    COUNT(DISTINCT Household_ID) AS DistinctHouseholdCnt   -- <-- adjust column name if yours differs
+FROM
+    zzroprod.do.v_M_AcctHistory
+WHERE
+    AccountNumber     LIKE '3%'        -- <-- or whatever column stores the account identifier
+    AND ManagedAccountFlag = '1b'      -- <-- literal value "1b" as you requested
+    AND TimePeriod_ID IN (SELECT TimePeriod_ID FROM @WantedPeriods);
