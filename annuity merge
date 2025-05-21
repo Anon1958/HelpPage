@@ -1,0 +1,19 @@
+import pandas as pd
+from pathlib import Path
+
+workbook  = Path(r"C:\Path\To\Your\workbook.xlsx")   # source file
+out_file  = workbook.with_stem(workbook.stem + "_combined")
+
+# --- read every sheet into a list of DataFrames ---
+dfs = []
+with pd.ExcelFile(workbook) as xls:
+    for sheet in xls.sheet_names:
+        df = pd.read_excel(xls, sheet_name=sheet)
+        df["__Sheet"] = sheet          # keep the sheet name (optional)
+        dfs.append(df)
+
+# --- stack them and write back ---
+combined = pd.concat(dfs, ignore_index=True)
+combined.to_excel(out_file, index=False, sheet_name="Combined")
+
+print(f"✅  All sheets stacked → {out_file}")
