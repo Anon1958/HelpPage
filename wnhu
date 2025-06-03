@@ -126,3 +126,45 @@ FROM dbo.e_M_BAMHouseholdCurrent;
 GO
 
 
+
+freshness 
+
+
+USE ZZROProd;
+GO
+/* 1️⃣  See the most recent timestamp in the whole table */
+SELECT MAX(LastUpdateDT) AS LatestLastUpdateDT
+FROM dbo.e_M_NNAAcctHST;
+GO
+
+/* 2️⃣  Pull the 100 most‑recent rows, newest first */
+SELECT TOP (100) *
+FROM dbo.e_M_NNAAcctHST
+ORDER BY LastUpdateDT DESC;
+GO
+
+/* 3️⃣  OPTIONAL:  Check freshness by month (TimePeriod_ID) */
+SELECT
+    TimePeriod_ID,
+    MAX(LastUpdateDT) AS MaxLastUpdateDT,
+    COUNT(*)          AS RowCount
+FROM dbo.e_M_NNAAcctHST
+GROUP BY TimePeriod_ID
+ORDER BY TimePeriod_ID DESC;
+GO
+
+/* 4️⃣  OPTIONAL:  Inspect ONLY the rows loaded in the latest batch */
+DECLARE @LatestDT DATETIME = (
+    SELECT MAX(LastUpdateDT)
+    FROM dbo.e_M_NNAAcctHST
+);
+SELECT *
+FROM dbo.e_M_NNAAcctHST
+WHERE LastUpdateDT = @LatestDT;
+GO
+
+
+
+
+
+
