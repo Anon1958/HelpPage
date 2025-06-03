@@ -91,3 +91,17 @@ EXEC sp_helptext 'dbo.e_M_NNAAcctHST';
 GO
 
 
+inspect tables
+
+
+USE ZZROProd;
+GO
+SELECT 
+    o.name,
+    o.type,            -- 'U' = table, 'S' = system table, 'SN' = synonym
+    o.type_desc
+FROM sys.objects o
+WHERE o.name IN ('e_M_BAMHouseholdCurrent',
+                 'e_M_AccountHistory',
+                 'e_M_NNAAcctHST');
+
