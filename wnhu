@@ -105,3 +105,24 @@ WHERE o.name IN ('e_M_BAMHouseholdCurrent',
                  'e_M_AccountHistory',
                  'e_M_NNAAcctHST');
 
+
+
+
+USE ZZROProd;
+GO
+/* A) List of columns */
+SELECT 
+    COLUMN_NAME,
+    DATA_TYPE,
+    ORDINAL_POSITION
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'dbo'
+  AND TABLE_NAME   = 'e_M_BAMHouseholdCurrent'
+ORDER BY ORDINAL_POSITION;
+GO
+/* B) First 100 rows (add an ORDER BY once you identify a freshness column) */
+SELECT TOP (100) *
+FROM dbo.e_M_BAMHouseholdCurrent;
+GO
+
+
