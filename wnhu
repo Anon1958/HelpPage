@@ -51,3 +51,13 @@ EXEC sp_addextendedproperty
     @level1type = N'VIEW',  @level1name = 'v_M_BAMHouseholdCurrent',
     @level2type = N'COLUMN', @level2name = 'HouseholdID';
 GO
+
+
+
+USE YourDatabase;
+SELECT 
+    sed.referenced_schema_name, 
+    sed.referenced_entity_name,
+    sed.referenced_class_desc
+FROM sys.sql_expression_dependencies AS sed
+WHERE sed.referencing_id = OBJECT_ID(N'SSE.v_M_BAMHouseholdCurrent');
