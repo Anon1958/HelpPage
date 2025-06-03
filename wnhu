@@ -234,4 +234,74 @@ WHERE LastUpdateDT = @LatestDT;
 GO
 
 
+2 again
+USE ZZROProd;
+GO
+/* 1️⃣ Latest period present */
+SELECT MAX(TimePeriod_ID) AS LatestTimePeriod
+FROM dbo.e_M_BAMHouseholdCurrent;
+GO
+
+/* Save it to a variable for later steps */
+DECLARE @LatestPeriod INT = (
+    SELECT MAX(TimePeriod_ID)
+    FROM dbo.e_M_BAMHouseholdCurrent
+);
+
+/* 2️⃣ Show 100 rows from the newest period */
+SELECT TOP (100) *
+FROM dbo.e_M_BAMHouseholdCurrent
+WHERE TimePeriod_ID = @LatestPeriod;
+GO
+
+/* 3️⃣ Row counts and freshness by month */
+SELECT
+    TimePeriod_ID,
+    COUNT(*)          AS [RowCount]
+FROM dbo.e_M_BAMHouseholdCurrent
+GROUP BY TimePeriod_ID
+ORDER BY TimePeriod_ID DESC;
+GO
+
+/* 4️⃣ (Equivalent) list of **all** rows in the latest period */
+SELECT *
+FROM dbo.e_M_BAMHouseholdCurrent
+WHERE TimePeriod_ID = @LatestPeriod;
+GO
+
+3 again 
+USE ZZROProd;
+GO
+/* 1️⃣ Latest As‑Of period present */
+SELECT MAX(AsOfTimePeriod) AS LatestAsOfPeriod      -- change column name if yours differs
+FROM dbo.e_M_AccountHistory;
+GO
+
+DECLARE @LatestAsOf INT = (
+    SELECT MAX(AsOfTimePeriod)                      -- same column
+    FROM dbo.e_M_AccountHistory
+);
+
+/* 2️⃣ Show 100 rows from that As‑Of period */
+SELECT TOP (100) *
+FROM dbo.e_M_AccountHistory
+WHERE AsOfTimePeriod = @LatestAsOf;                 -- same column
+GO
+
+/* 3️⃣ Row counts per As‑Of period */
+SELECT
+    AsOfTimePeriod,                                 -- same column
+    COUNT(*)  AS [RowCount]
+FROM dbo.e_M_AccountHistory
+GROUP BY AsOfTimePeriod
+ORDER BY AsOfTimePeriod DESC;
+GO
+
+/* 4️⃣ All rows from the latest As‑Of period */
+SELECT *
+FROM dbo.e_M_AccountHistory
+WHERE AsOfTimePeriod = @LatestAsOf;                 -- same column
+GO
+
+
 
