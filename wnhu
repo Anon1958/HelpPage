@@ -305,3 +305,151 @@ GO
 
 
 
+
+
+
+Below you’ll find three separate deliverables:
+
+⸻
+
+1. Current Lineage Map (top → base)
+
+Level‑0 :  Views used in original Query2
+│
+├─ SSE.v_M_BAMHouseholdCurrent
+│      ↓
+│      dbo.e_M_BAMHouseholdCurrent        (table, freshness column: TimePeriod_ID)
+│
+├─ SSE.v_M_AcctHistory
+│      ↓
+│      dbo.e_M_AccountHistory             (table, freshness column: AsOfTimePeriod)
+│
+└─ SSE.v_M_NNAAcctHST
+       ↓
+       dbo.e_M_NNAAcctHST                 (table, freshness columns: TimePeriod_ID, LastUpdateDT)
+
+All three e_ objects are type U (base tables), so we are already at the lowest layer.
+
+⸻
+
+2. Re‑written consolidated query (uses fresh tables)
+
+Below is a template that:
+	•	Determines the latest common period across all three tables (safe alignment).
+	•	Builds three CTEs filtered to that period.
+	•	Replicates the logic of your original Query 2 (same joins & aggregations) but sourced from the up‑to‑date tables.
+
+USE ZZROProd;
+GO
+/* 0️⃣  Pick the latest period present in ALL three tables */
+DECLARE @LatestCommonPeriod INT = (
+    SELECT MIN(LatestPeriod)
+    FROM (
+        SELECT MAX(TimePeriod_ID)   AS LatestPeriod FROM dbo.e_M_BAMHouseholdCurrent
+        UNION ALL
+        SELECT MAX(AsOfTimePeriod)  FROM dbo.e_M_AccountHistory
+        UNION ALL
+        SELECT MAX(TimePeriod_ID)   FROM dbo.e_M_NNAAcctHST
+    ) p
+);
+/* 1️⃣  Build aligned slices */
+WITH
+BAM AS (
+    SELECT *
+    FROM dbo.e_M_BAMHouseholdCurrent
+    WHERE TimePeriod_ID = @LatestCommonPeriod
+),
+Acct AS (
+    SELECT *
+    FROM dbo.e_M_AccountHistory
+    WHERE AsOfTimePeriod = @LatestCommonPeriod
+),
+NNA AS (
+    SELECT *
+    FROM dbo.e_M_NNAAcctHST
+    WHERE TimePeriod_ID = @LatestCommonPeriod
+)
+/* 2️⃣  Reproduce original Query2 logic (example) */
+SELECT
+    BAM.TimePeriod_ID,
+    Acct.HouseholdKey,
+    COUNT(DISTINCT Acct.ADPAccountNumber)                     AS Accounts,
+    BAM.HHNewStatusCurrent,
+    /* Sample CASE logic preserved */
+    COUNT(CASE WHEN BAM.HHRepRecruitTPCurrent >= '202405'
+               THEN 1 END)                                    AS RecruitFlag,
+    SUM(Acct.TotalAUA)                                        AS AUA,
+    SUM(NNA.AUA_prev)                                         AS PrevAUA,
+    /* … continue with all original calculations … */
+    SUM(CASE WHEN Acct.ManagedAccountFlag = '1'
+             THEN Acct.TotalAUA ELSE 0 END)                   AS ManagedAUA,
+    SUM(CASE WHEN Acct.ClientAccountType = 'T'
+             THEN Acct.TotalAUA ELSE 0 END)                   AS TrustAUA,
+    /* example T‑12 metrics */
+    SUM(Acct.T12MonthCommissionBalance)                       AS T12Gross,
+    SUM(Acct.T12MonthManagedAccountFees)                      AS T12Managed,
+    SUM(Acct.T12MonthMutualFundTrails)                        AS T12_MFTrails,
+    SUM(Acct.T12MonthAnnuityTrails)                           AS T12_AnnuityTrails,
+    BAM.MaxHHAUALast12MonthsCurrent
+FROM BAM
+INNER JOIN Acct
+    ON BAM.TimePeriod_ID = Acct.AsOfTimePeriod
+   AND BAM.HouseholdKeyCurrent = Acct.HouseholdKey
+INNER JOIN NNA
+    ON NNA.TimePeriod_ID     = Acct.AsOfTimePeriod
+   AND NNA.ADPAccountNumber  = Acct.ADPAccountNumber
+WHERE BAM.HHMaxHUAALast12MonthsCurrent BETWEEN 0.01 AND 1000000
+  AND Acct.ActiveFlag = '1'
+  AND Acct.FirmTypeCode = 'R'
+GROUP BY
+    BAM.TimePeriod_ID,
+    Acct.HouseholdKey,
+    BAM.HHNewStatusCurrent,
+    BAM.MaxHHAUALast12MonthsCurrent;
+
+Notes
+	•	If you decide you’re comfortable mixing periods (Option B), filter each CTE on its own MAX(...) instead of @LatestCommonPeriod.
+	•	Any column names in comments (TotalAUA, AUA_prev, etc.) should match your schema exactly.
+	•	Add or modify CASE/SUM logic to replicate every metric from the original Query 2.
+
+⸻
+
+3. Draft email to Laurelyn
+
+Subject: BAM / Account / NNA Lineage Findings & Next‑Steps
+
+Hi Laurelyn,
+
+I’ve been digging into the three BAM data sets we use in our UHNW reporting pipeline-- v_M_BAMHouseholdCurrent, v_M_AcctHistory, and v_M_NNAAcctHST--and wanted to share what I’ve learned so far and where I could use your expertise.
+
+What I traced:
+	•	Each SSE view is essentially a wrapper over an e_ base table in dbo:
+	•	e_M_BAMHouseholdCurrent
+	•	e_M_AccountHistory
+	•	e_M_NNAAcctHST
+	•	These e_ tables are physical (type U), not synonyms or nested views.
+	•	e_M_NNAAcctHST already contains rows for TimePeriod_ID = 202505 loaded on 6/2/2025 (14:17), while e_M_BAMHouseholdCurrent and e_M_AccountHistory currently top out at earlier periods.
+
+Why this matters:
+Our current consolidated query joins the SSE views, which aren’t refreshed until mid‑month. By querying the base tables directly we can see NNA data much earlier, but we need to understand when BAM Household and Account History reach the same period so we don’t join mismatched slices.
+
+Questions / next steps:
+	1.	Could you confirm the ETL schedule (or upstream source) for each e_ table--particularly when e_M_BAMHouseholdCurrent and e_M_AccountHistory pick up the new period?
+	2.	Is there a recommended "go live" rule the team uses (e.g., wait until all three tables share the same TimePeriod_ID before publishing)?
+	3.	Are there any additional freshness columns or audit tables that would help us automate the alignment check?
+
+Once we agree on the refresh cadence, I can finalize a version of the consolidated query that pulls from the base tables and dynamically filters on the latest common period (or flags mixed‑period data if we decide to preview early).
+
+Happy to share the SQL lineage scripts and a draft of the rewritten query if helpful. Let me know a good time to walk through or feel free to add comments.
+
+Thanks for your guidance,
+
+David Brunik
+
+⸻
+
+Next milestone
+
+Run the freshness probes on the other two tables and confirm their latest periods.
+Then we can lock in the final filter logic (latest common vs. mixed) and you’ll be ready to migrate fully to the fresh‑data version of the report.
+
