@@ -164,7 +164,74 @@ WHERE LastUpdateDT = @LatestDT;
 GO
 
 
+2
+USE ZZROProd;
+GO
+/* 1️⃣ Latest timestamp available (substitute a different column if needed) */
+SELECT MAX(LastUpdateDT) AS LatestLastUpdateDT
+FROM dbo.e_M_BAMHouseholdCurrent;   -- if no LastUpdateDT, try MAX(LoadDate) or just skip
+GO
 
+/* 2️⃣ 100 most‑recent rows */
+SELECT TOP (100) *
+FROM dbo.e_M_BAMHouseholdCurrent
+ORDER BY LastUpdateDT DESC;         -- change column name if needed
+GO
+
+/* 3️⃣ Freshness by month */
+SELECT
+    TimePeriod_ID,
+    MAX(LastUpdateDT) AS MaxLastUpdateDT,
+    COUNT(*)          AS [RowCount]
+FROM dbo.e_M_BAMHouseholdCurrent
+GROUP BY TimePeriod_ID
+ORDER BY TimePeriod_ID DESC;
+GO
+
+/* 4️⃣ Rows in latest batch */
+DECLARE @LatestDT DATETIME = (
+    SELECT MAX(LastUpdateDT)
+    FROM dbo.e_M_BAMHouseholdCurrent
+);
+SELECT *
+FROM dbo.e_M_BAMHouseholdCurrent
+WHERE LastUpdateDT = @LatestDT;
+GO
+
+
+3
+USE ZZROProd;
+GO
+/* 1️⃣ Latest timestamp */
+SELECT MAX(LastUpdateDT) AS LatestLastUpdateDT
+FROM dbo.e_M_AccountHistory;        -- change column name if needed
+GO
+
+/* 2️⃣ 100 most‑recent rows */
+SELECT TOP (100) *
+FROM dbo.e_M_AccountHistory
+ORDER BY LastUpdateDT DESC;         -- or AsOfTimePeriod if that’s the only indicator
+GO
+
+/* 3️⃣ Freshness by month */
+SELECT
+    TimePeriod_ID,
+    MAX(LastUpdateDT) AS MaxLastUpdateDT,
+    COUNT(*)          AS [RowCount]
+FROM dbo.e_M_AccountHistory
+GROUP BY TimePeriod_ID
+ORDER BY TimePeriod_ID DESC;
+GO
+
+/* 4️⃣ Rows in latest batch */
+DECLARE @LatestDT DATETIME = (
+    SELECT MAX(LastUpdateDT)
+    FROM dbo.e_M_AccountHistory
+);
+SELECT *
+FROM dbo.e_M_AccountHistory
+WHERE LastUpdateDT = @LatestDT;
+GO
 
 
 
