@@ -83,3 +83,11 @@ WHERE sed.referencing_id IN (
 );
 
 
+EXEC sp_helptext 'dbo.e_M_BAMHouseholdCurrent';
+GO
+EXEC sp_helptext 'dbo.e_M_AccountHistory';
+GO
+EXEC sp_helptext 'dbo.e_M_NNAAcctHST';
+GO
+
+
