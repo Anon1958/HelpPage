@@ -1,0 +1,104 @@
+import pyodbc
+from sqlalchemy import create_engine
+import xlsxwriter
+from datetime import datetime
+
+# ---- CONFIGURATION ----
+# ✅ EDIT THESE
+server = "zzr@zzr001.corp.isib.net,6230"    # <-- your server
+database = "ZZRProd"                        # <-- your database
+excel_output_path = r"C:\Users\liams395\TrustDetailsMonthly_FAST.xlsx"  # <-- your Excel file path
+
+# 🔐 If you're using Windows Authentication, use this:
+connection_string = (
+    f"mssql+pyodbc://@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
+)
+
+# ---- SETUP ----
+engine = create_engine(connection_string, fast_executemany=True, pool_pre_ping=True)
+
+# Range of months: Jan 2022 to Apr 2025
+start_period = 202201
+end_period = 202504
+
+start_year, start_month = divmod(start_period, 100)
+end_year, end_month = divmod(end_period, 100)
+
+# Create workbook with constant_memory enabled
+workbook = xlsxwriter.Workbook(excel_output_path, {"constant_memory": True})
+worksheets = []
+data_written = False
+
+try:
+    conn = engine.raw_connection()
+    cursor = conn.cursor()
+    cursor.arraysize = 10000
+
+    year, month = start_year, start_month
+    while (year < end_year) or (year == end_year and month <= end_month):
+        tp_id = year * 100 + month
+        print(f"Processing TimePeriod_ID {tp_id}...")
+
+        # Run query
+        cursor.execute(
+            "SELECT * FROM ZZRProd.dbo.e_M_TrustDetail WHERE TimePeriod_ID = ?",
+            tp_id
+        )
+
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchmany(10000)
+
+        if rows:
+            sheet_name = str(tp_id)
+            worksheet = workbook.add_worksheet(sheet_name)
+            worksheets.append(worksheet)
+
+            # Write header
+            worksheet.write_row(0, 0, columns)
+
+            row_num = 1
+            while rows:
+                for row in rows:
+                    worksheet.write_row(row_num, 0, row)
+                    row_num += 1
+                rows = cursor.fetchmany(10000)
+
+            print(f"✅ TimePeriod_ID {tp_id} written with {row_num - 1} rows.")
+            data_written = True
+        else:
+            print(f"⚠️ No data for TimePeriod_ID {tp_id}.")
+
+        # Advance month
+        if month == 12:
+            year += 1
+            month = 1
+        else:
+            month += 1
+
+    # If no data was written, add dummy sheet
+    if not data_written:
+        sheet = workbook.add_worksheet("No Data Available")
+        sheet.write(0, 0, "No data found for any TimePeriod_ID.")
+        worksheets.append(sheet)
+
+    # Ensure first sheet is visible and active
+    if worksheets:
+        worksheets[0].activate()
+        worksheets[0].set_first_sheet()
+
+except Exception as e:
+    print(f"❌ Error occurred: {e}")
+
+finally:
+    try:
+        workbook.close()
+        print(f"✅ Excel file written: {excel_output_path}")
+    except Exception as e:
+        print(f"❌ Failed to close Excel file: {e}")
+
+    try:
+        cursor.close()
+        conn.close()
+        engine.dispose()
+    except:
+        pass
