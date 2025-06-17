@@ -109,3 +109,6 @@ finally:
         
         
  =LET(rowData,INDEX('Chart Data'!$AB:$ZZ,ROW(),),lastVal,XLOOKUP(9.9E+307,rowData,rowData,, -1),lastPos,XMATCH(lastVal,rowData,0,-1),prevVal,INDEX(rowData,lastPos-1),IFERROR(lastVal/prevVal-1,""))
+ 
+ 
+ =LET(r,'Chart Data'!$AB$13:$ZZ$13, last,XLOOKUP(1,1/(r<>""),r,,0,-1), p,XMATCH(last,r), IFERROR(last/INDEX(r,p-1)-1,""))
