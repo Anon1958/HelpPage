@@ -117,3 +117,6 @@ finally:
  
  
  =LET(r,'Chart Data'!$AB$13:$ZZ$13, last,XLOOKUP(1,1/(r<>""),r,,0,-1), p,XMATCH(last,r,0,-1), IF(p>12, IFERROR(last/INDEX(r,p-12)-1,""), ""))
+ 
+ 
+ =LET(r,'Chart Data'!$A$13:$ZZ$13,pos,XMATCH(1,1/(r<>""),0,-1),IF(pos>12,IFERROR(INDEX(r,pos)/INDEX(r,pos-12)-1,""),""))
