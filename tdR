@@ -102,3 +102,10 @@ finally:
         engine.dispose()
     except:
         pass
+        
+        
+        
+        
+        
+        
+ =LET(rowData,INDEX('Chart Data'!$AB:$ZZ,ROW(),),lastVal,XLOOKUP(9.9E+307,rowData,rowData,, -1),lastPos,XMATCH(lastVal,rowData,0,-1),prevVal,INDEX(rowData,lastPos-1),IFERROR(lastVal/prevVal-1,""))
