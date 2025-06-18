@@ -120,3 +120,109 @@ finally:
  
  
  =LET(r,'Chart Data'!$A$13:$ZZ$13,pos,XMATCH(1,1/(r<>""),0,-1),IF(pos>12,IFERROR(INDEX(r,pos)/INDEX(r,pos-12)-1,""),""))
+ 
+ 
+ 
+ """
+Export EVERY Outlook e-mail (Inbox, Sent, Archive, Deleted) -- including all
+sub-folders -- into a single Word document.
+
+The file is written to:
+    C:\Users\iams395\Desktop\outlook_archive.docx
+"""
+
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import win32com.client          # Outlook COM bridge
+from docx import Document       # python-docx
+from tqdm import tqdm           # progress bar
+
+# ──────────────────────────────────────────────────────────────────────────────
+OUTPUT_PATH = Path(r"C:\Users\iams395\Desktop\outlook_archive.docx")
+FOLDERS_TO_INCLUDE = [
+    6,   # Inbox       (olFolderInbox)
+    5,   # Sent Items  (olFolderSentMail)
+    3,   # Deleted     (olFolderDeletedItems)
+]
+# Name-based folders (e.g. "Archive") can be appended later
+ADDITIONAL_ROOT_NAMES = ["Archive"]   # adjust to match your mailbox tree
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def open_outlook():
+    try:
+        return win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+    except Exception as e:
+        sys.exit(f"❌  Could not open Outlook: {e}")
+
+
+def walk_folder(folder):
+    """Depth-first walk: yield every MailItem inside *folder* and its children."""
+    stack = [folder]
+    while stack:
+        f = stack.pop()
+        items = f.Items
+        # Newest first is usually nicer if you need to cancel halfway
+        items.Sort("ReceivedTime", True)
+        for itm in items:
+            # olMail = 43 → skip calendar invites etc.
+            if itm.Class == 43:
+                yield itm
+        # enqueue children
+        stack.extend(f.Folders)
+
+
+def add_msg_to_doc(doc: Document, idx: int, m):
+    """Append one message’s details to the Word document."""
+    header = f"{idx}. {m.Subject or '(no subject)'}"
+    meta = (
+        f"From: {m.SenderName or ''}\n"
+        f"To: {m.To or ''}\n"
+        f"CC: {m.CC or ''}\n"
+        f"Sent: {m.SentOn.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Received: {m.ReceivedTime.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    doc.add_heading(header, level=3)
+    doc.add_paragraph(meta, style="Intense Quote")
+    doc.add_paragraph(m.Body)
+    doc.add_page_break()
+
+
+def main():
+    outlook = open_outlook()
+
+    # Collect root folders
+    roots = [outlook.GetDefaultFolder(f_id) for f_id in FOLDERS_TO_INCLUDE]
+    for name in ADDITIONAL_ROOT_NAMES:
+        try:
+            roots.append(outlook.Folders[name])
+        except Exception:
+            print(f"⚠️  Folder "{name}" not found -- skipping")
+
+    # Build a list first so tqdm can show total count
+    all_messages = []
+    for root in roots:
+        all_messages.extend(list(walk_folder(root)))
+
+    print(f"Exporting {len(all_messages):,} messages…")
+
+    doc = Document()
+    doc.add_heading("Full Outlook Archive", level=1)
+    doc.add_paragraph(f"Generated on {datetime.now():%Y-%m-%d %H:%M:%S}\n")
+
+    for idx, msg in enumerate(tqdm(all_messages, unit='email'), start=1):
+        try:
+            add_msg_to_doc(doc, idx, msg)
+        except Exception as e:
+            print(f"[{idx}] ⚠️  Skipped one message: {e}")
+
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(OUTPUT_PATH)
+    print(f"✅  Finished! Archive written to {OUTPUT_PATH}")
+
+
+if __name__ == "__main__":
+    main()
