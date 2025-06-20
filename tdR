@@ -226,3 +226,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    
+    
+    =LET(
+  r, 'Fee-Based Metrics'!AK5:ZZ5,
+  last, XLOOKUP(1, 1/(r<>""), r,, 0, -1),
+  p, XMATCH(last, r),
+  INDEX(r, p - COLUMNS(AF5:$AF5) + 1)
+)
+
+
+=LET(r,'Fee-Based Metrics'!AK5:ZZ5,last,XLOOKUP(1,1/(r<>""),r,,0,-1),p,XMATCH(last,r),INDEX(r,p-COLUMNS(AF5:$AF5)+1)/10^9)
+
+=LET(r,'Fee-Based Metrics'!AK5:ZZ5,last,XLOOKUP(1,1/(r<>""),r,,0,-1),p,XMATCH(last,r),INDEX(r,p-COLUMNS(AF5:$AF5)+1)/10^9)
