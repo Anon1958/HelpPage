@@ -1,0 +1,157 @@
+/* =========================================================================================
+   STEP 0 – Your current (very long) query goes right here
+   ========================================================================================= */
+WITH base AS (
+    -- >>>>>>>>>>>>>>>>>>>  PASTE YOUR EXISTING SELECT STATEMENT HERE  <<<<<<<<<<<<<<<<<<<<
+    /* Example skeleton
+    SELECT  ...
+    FROM    ...
+    WHERE   ...
+    */
+)
+
+/* =========================================================================================
+   STEP 1 – Per‑account calculations that replicate the Excel formulas
+   ========================================================================================= */
+, calc AS (
+    SELECT
+        b.*,
+
+        /* ------------------------------------------------------------------
+           1.a  Reconfirm insurance/coverage limits just in case
+        ------------------------------------------------------------------ */
+        CASE WHEN b.Fdic_Account_Category = 'Joint'
+             THEN 498000 ELSE 249000 END                                              AS insurance_limit,
+
+        CASE WHEN b.Fdic_Account_Category = 'Joint'
+             THEN 10000000 ELSE 5000000 END                                           AS coverage_limit,
+
+        /* ------------------------------------------------------------------
+           1.b  Insured amounts by bank
+                  – "insured" = MIN(balance , insurance_limit)
+           ------------------------------------------------------------------ */
+        LEAST(b.CNB_Balance ,                     /* CNB cannot exceed one‑bank limit */
+              CASE WHEN b.Fdic_Account_Category = 'Joint' THEN 498000 ELSE 249000 END)
+              AS cnb_insured,
+
+        LEAST(b.RBC_Balance ,
+              CASE WHEN b.Fdic_Account_Category = 'Joint' THEN 498000 ELSE 249000 END)
+              AS rbc_insured,
+
+        /* 3rd‑party insured uses whatever headroom is left under the
+           5 / 10 MM aggregate limit                                 */
+        LEAST(
+              b.Third_Parties_Balance ,
+              GREATEST(
+                       0 ,
+                       (CASE WHEN b.Fdic_Account_Category='Joint'
+                             THEN 10000000 ELSE 5000000 END)
+                       - LEAST(b.CNB_Balance ,
+                               CASE WHEN b.Fdic_Account_Category='Joint' THEN 498000 ELSE 249000 END)
+                       - LEAST(b.RBC_Balance ,
+                               CASE WHEN b.Fdic_Account_Category='Joint' THEN 498000 ELSE 249000 END)
+                     )
+        )                                                                               AS tp_insured,
+
+        /* ------------------------------------------------------------------
+           1.c  Totals and overage
+           ------------------------------------------------------------------ */
+        /* This is the figure Excel called   TOTAL_FDIC_USED                      */
+        LEAST(b.Sweep_Balance ,
+              CASE WHEN b.Fdic_Account_Category='Joint'
+                   THEN 10000000 ELSE 5000000 END)                                    AS insured_total,
+
+        /* What Excel called  'Overage' – the part above aggregate limit          */
+        GREATEST(0 ,
+                 b.Sweep_Balance
+                 - (CASE WHEN b.Fdic_Account_Category='Joint'
+                         THEN 10000000 ELSE 5000000 END))                             AS overage_total
+
+        /* ------------------------------------------------------------------
+           1.d  # of banks actually used
+                  1  = balance ≤ 1×limit
+                  2  = >1×limit but ≤2×limit
+                  20 = >2×limit but ≤ aggregate limit (full ICS utilisation)
+                  21 = balance > aggregate limit  (full ICS + excess @ Bank 1)
+           ------------------------------------------------------------------ */
+      , CASE
+            WHEN b.Sweep_Balance <=
+                 (CASE WHEN b.Fdic_Account_Category='Joint' THEN 498000 ELSE 249000 END)
+                 THEN 1
+            WHEN b.Sweep_Balance <=
+                 2 * (CASE WHEN b.Fdic_Account_Category='Joint' THEN 498000 ELSE 249000 END)
+                 THEN 2
+            WHEN b.Sweep_Balance <=
+                 (CASE WHEN b.Fdic_Account_Category='Joint' THEN 10000000 ELSE 5000000 END)
+                 THEN 20
+            ELSE 21
+        END                                                                             AS banks_covered
+    FROM   base b
+)
+
+/* =========================================================================================
+   STEP 2 – Block A : Account‑ownership matrix (matches the top grid)
+   ========================================================================================= */
+, matrix AS (
+    SELECT
+        Client_Account_Ownership_Category                                AS account_category
+      , MAX(insurance_limit)                                             AS insurance_limit
+      , MAX(coverage_limit)                                              AS coverage_limit
+      , SUM(cnb_insured)                                                 AS cnb
+      , SUM(rbc_insured)                                                 AS rbc_bank
+      , SUM(tp_insured)                                                  AS third_party_banks
+      , SUM(cnb_insured + rbc_insured + tp_insured)                      AS total
+    FROM   calc
+    GROUP  BY Client_Account_Ownership_Category
+)
+
+/* =========================================================================================
+   STEP 3 – Block B : Sweep summary (insured vs. uninsured totals)
+   ========================================================================================= */
+, sweep_totals AS (
+    SELECT
+        SUM(insured_total)                                               AS insured_balances
+      , SUM(overage_total)                                               AS uninsured_balances
+      , SUM(Sweep_Balance)                                               AS total_sweep
+    FROM   calc
+)
+
+/* =========================================================================================
+   STEP 4 – Block C : Waterfall allocation
+           Bank 1  = CNB  (insured  +  overage)
+           Bank 2  = RBC  (insured only)
+           Banks 3‑20 = 3P (insured only)
+   ========================================================================================= */
+, waterfall AS (
+    SELECT
+          SUM(cnb_insured)                              AS bank1_insured
+        , SUM(rbc_insured)                              AS bank2_insured
+        , SUM(tp_insured)                               AS banks3_20_insured
+
+        , SUM(overage_total)                            AS bank1_uninsured   -- excess always goes to CNB
+    FROM   calc
+)
+
+/* =========================================================================================
+   FINAL OUTPUT SECTION
+   (Three independent SELECTs -- most SQL clients will return them as three grids.
+    If yours doesn’t, just run them one at a time.)
+   ========================================================================================= */
+
+-- A)  Grid by account category ------------------------------------------------------------
+SELECT * FROM matrix ORDER BY account_category;
+
+-- B)  Sweep totals ------------------------------------------------------------------------
+SELECT
+      insured_balances      AS insured
+    , uninsured_balances    AS uninsured
+    , total_sweep           AS total
+FROM  sweep_totals;
+
+-- C)  Waterfall ---------------------------------------------------------------------------
+SELECT
+      bank1_uninsured           AS bank1_uninsured
+    , bank1_insured             AS bank1_insured
+    , bank2_insured             AS bank2_insured
+    , banks3_20_insured         AS banks3_20_insured
+FROM  waterfall;
