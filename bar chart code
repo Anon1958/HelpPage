@@ -1,0 +1,83 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# ── 1. Make sure the DataFrame columns match your data ───────────────
+df = df_mom.copy()                                 # <- rename if needed
+df["Period"] = df["Period"].astype(str)            # ensure labels
+df = df.sort_values("Period")                      # chronological order
+
+# ── 2. Figure & axes --------------------------------------------------
+fig, ax = plt.subplots(figsize=(8, 6))             # "almost square"
+bar_width = 0.6
+x = np.arange(len(df))
+
+bars = ax.bar(
+    x,
+    df["MoM"],
+    width=bar_width,
+    color="#1f77b4",                               # corporate blue
+    edgecolor="none",
+)
+
+# ── 3. Tidy axes & spacing -------------------------------------------
+y_min = min(0, df["MoM"].min() * 1.2)
+y_max = max(0, df["MoM"].max() * 1.2)
+ax.set_ylim(y_min, y_max * 1.25)                   # room for totals row
+ax.set_xlim(-0.5, len(df) - 0.5)
+ax.set_ylabel("MoM Change", fontsize=11)
+ax.set_xlabel("Period (YYYY‑MM)", fontsize=11)
+ax.set_xticks(x, df["Period"], rotation=45, ha="right")
+
+# Hide the frame we don’t need
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+
+# ── 4. Title (bold, bigger) ------------------------------------------
+ax.set_title(
+    "Month‑over‑Month Change in Accounts",
+    fontsize=14,
+    fontweight="bold",
+    pad=28,                                       # pushes title upward
+)
+
+# ── 5. Row of TOTAL ACCOUNTS under the title -------------------------
+totals_y = y_max * 1.15                           # just beneath top margin
+for xi, total in zip(x, df["Accounts"]):
+    ax.text(
+        xi,
+        totals_y,
+        f"{total:,.0f}",
+        ha="center",
+        va="bottom",
+        fontsize=9,
+    )
+
+# ── 6. Annotate each bar with its sign‑prefixed change ---------------
+offset = y_max * 0.02                             # 2 % of range for padding
+for rect, delta in zip(bars, df["MoM"]):
+    x_center = rect.get_x() + rect.get_width() / 2
+    if delta >= 0:
+        ax.text(
+            x_center,
+            rect.get_height() + offset,
+            f"+{delta:,.0f}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
+        )
+    else:
+        ax.text(
+            x_center,
+            rect.get_height() - offset,
+            f"{delta:,.0f}",                      # already negative
+            ha="center",
+            va="top",
+            fontsize=10,
+            fontweight="bold",
+        )
+
+# ── 7. Final layout & show/save --------------------------------------
+plt.tight_layout(rect=[0, 0, 1, 0.92])            # leave room for title/totals
+plt.show()                                        # or fig.savefig("mom_chart.png", dpi=150)
