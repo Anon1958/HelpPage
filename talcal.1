@@ -1,0 +1,86 @@
+/*==========================================================
+   CAL / TAILORED‑LENDING -- 202505 MONTH  (three result sets)
+   1️⃣  Full ISR rows (with household columns added)
+   2️⃣  LNTRANSIT = 91421  ‑– per‑account sums
+   3️⃣  LNTRANSIT = 7157   ‑– per‑account sums
+   (Green "--" comment banners separate the sections)
+==========================================================*/
+
+;WITH AcctHousehold AS   -- build household map once
+(
+    SELECT  ah.ADPAccountNumber,
+            ah.TimePeriod_ID,
+            b.HouseholdKeyCurrent,
+            b.MaxHHAUAlast12MonthsCurrent,
+            ROW_NUMBER() OVER (PARTITION BY ah.ADPAccountNumber
+                               ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM    ZZR0Prod.SSE.v_M_AcctHistory         AS ah
+    JOIN    ZZR0Prod.SSE.v_M_BAMHouseholdCurrent AS b
+           ON b.HouseholdKeyCurrent = ah.HouseholdKey
+          AND b.TimePeriod_ID       = ah.TimePeriod_ID
+    WHERE   ah.TimePeriod_ID = 202505
+), AcctHouseholdDistinct AS
+(
+    SELECT  ADPAccountNumber,
+            TimePeriod_ID,
+            HouseholdKeyCurrent,
+            MaxHHAUAlast12MonthsCurrent
+    FROM    AcctHousehold
+    WHERE   rn = 1                                 -- one row per account
+), BaseISR AS
+(
+    /* join ISR rows (for 202505) to the household data */
+    SELECT  i.*,
+            a.HouseholdKeyCurrent,
+            a.MaxHHAUAlast12MonthsCurrent
+    FROM    ZZR0Prod.Sandbox.ISRDatabase_Full AS i
+    LEFT JOIN AcctHouseholdDistinct           AS a
+           ON a.ADPAccountNumber = i.DAINACCT
+          AND a.TimePeriod_ID    = i.LNYEARMTH
+    WHERE   i.LNYEARMTH = 202505
+)
+
+--=========================================================
+--  ►► RESULT SET 1 :  FULL ISR ROWS + HOUSEHOLD COLUMNS
+--=========================================================
+SELECT *
+FROM   BaseISR
+ORDER  BY DAINACCT;     -- sort however you prefer
+
+--=========================================================
+--  ►► RESULT SET 2 :  LNTRANSIT = 91421  (per‑account sums)
+--=========================================================
+SELECT  DAINACCT           AS ADPAccountNumber,
+        DAINCONTRACT,                          -- "Allen contract #"
+        LNTRANSIT,
+        SUM(USDSpot)       AS SumUSDSpot,
+        SUM([LIMIT])       AS SumLimit,
+        HouseholdKeyCurrent,
+        MaxHHAUAlast12MonthsCurrent
+FROM    BaseISR
+WHERE   LNTRANSIT = 91421
+GROUP BY DAINACCT,
+         DAINCONTRACT,
+         LNTRANSIT,
+         HouseholdKeyCurrent,
+         MaxHHAUAlast12MonthsCurrent
+ORDER BY ADPAccountNumber;
+
+--=========================================================
+--  ►► RESULT SET 3 :  LNTRANSIT = 7157   (per‑account sums)
+--=========================================================
+SELECT  DAINACCT           AS ADPAccountNumber,
+        DAINCONTRACT,
+        LNTRANSIT,
+        SUM(USDSpot)       AS SumUSDSpot,
+        SUM([LIMIT])       AS SumLimit,
+        HouseholdKeyCurrent,
+        MaxHHAUAlast12MonthsCurrent
+FROM    BaseISR
+WHERE   LNTRANSIT = 7157
+GROUP BY DAINACCT,
+         DAINCONTRACT,
+         LNTRANSIT,
+         HouseholdKeyCurrent,
+         MaxHHAUAlast12MonthsCurrent
+ORDER BY ADPAccountNumber;
