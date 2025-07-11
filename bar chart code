@@ -125,3 +125,87 @@ LEFT  JOIN  AcctHouseholdDistinct            AS a
 /* optional: keep the same month/yr in ISR if you only need 202505 now */
 /* WHERE       i.LNYEARMTH = 202505 */
 ;
+
+
+
+
+/* build the account‑to‑household mapping – same as before */
+;WITH AcctHousehold AS
+(
+    SELECT
+          ah.ADPAccountNumber
+        , ah.TimePeriod_ID
+        , b.HouseholdKeyCurrent
+        , b.MaxHHAUAlast12MonthsCurrent
+        , ROW_NUMBER() OVER
+          (PARTITION BY ah.ADPAccountNumber
+           ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM ZZRGProd.SSE.v_M_AcctHistory         AS ah
+    JOIN ZZRGProd.SSE.v_M_BAMHouseholdCurrent AS b
+      ON b.HouseholdKeyCurrent = ah.HouseholdKey
+     AND b.TimePeriod_ID       = ah.TimePeriod_ID
+    WHERE ah.TimePeriod_ID = 202505
+), AcctHouseholdDistinct AS
+(
+    SELECT ADPAccountNumber,
+           TimePeriod_ID,
+           HouseholdKeyCurrent,
+           MaxHHAUAlast12MonthsCurrent
+    FROM   AcctHousehold
+    WHERE  rn = 1
+)
+
+/* >>> SUMS for LNTRANSIT = 91421 <<< */
+SELECT   i.DAINACCT                   AS ADPAccountNumber
+       , SUM(i.USDSpot)               AS SumUSDSpot
+       , SUM(i.LIMIT)                 AS SumLimit
+FROM     ZZRGProd.Sandbox.ISRDatabase_Full AS i
+JOIN     AcctHouseholdDistinct            AS a
+       ON a.ADPAccountNumber = i.DAINACCT
+      AND a.TimePeriod_ID    = i.LNYEARMTH
+WHERE    i.LNYEARMTH = 202505
+  AND    i.LNTRANSIT = 91421          -- << the transit you asked for
+GROUP BY i.DAINACCT
+ORDER BY i.DAINACCT;
+
+
+
+
+/* same CTE – copy‑paste from above or keep it in a view/temp table */
+;WITH AcctHousehold AS
+(
+    SELECT
+          ah.ADPAccountNumber
+        , ah.TimePeriod_ID
+        , b.HouseholdKeyCurrent
+        , b.MaxHHAUAlast12MonthsCurrent
+        , ROW_NUMBER() OVER
+          (PARTITION BY ah.ADPAccountNumber
+           ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM ZZRGProd.SSE.v_M_AcctHistory         AS ah
+    JOIN ZZRGProd.SSE.v_M_BAMHouseholdCurrent AS b
+      ON b.HouseholdKeyCurrent = ah.HouseholdKey
+     AND b.TimePeriod_ID       = ah.TimePeriod_ID
+    WHERE ah.TimePeriod_ID = 202505
+), AcctHouseholdDistinct AS
+(
+    SELECT ADPAccountNumber,
+           TimePeriod_ID,
+           HouseholdKeyCurrent,
+           MaxHHAUAlast12MonthsCurrent
+    FROM   AcctHousehold
+    WHERE  rn = 1
+)
+
+/* >>> SUMS for LNTRANSIT = 7157 <<< */
+SELECT   i.DAINACCT                   AS ADPAccountNumber
+       , SUM(i.USDSpot)               AS SumUSDSpot
+       , SUM(i.LIMIT)                 AS SumLimit
+FROM     ZZRGProd.Sandbox.ISRDatabase_Full AS i
+JOIN     AcctHouseholdDistinct            AS a
+       ON a.ADPAccountNumber = i.DAINACCT
+      AND a.TimePeriod_ID    = i.LNYEARMTH
+WHERE    i.LNYEARMTH = 202505
+  AND    i.LNTRANSIT = 7157            -- << the other transit
+GROUP BY i.DAINACCT
+ORDER BY i.DAINACCT;
