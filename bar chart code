@@ -209,3 +209,115 @@ WHERE    i.LNYEARMTH = 202505
   AND    i.LNTRANSIT = 7157            -- << the other transit
 GROUP BY i.DAINACCT
 ORDER BY i.DAINACCT;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*==========================================================
+  PER‑ACCOUNT CAL / TAILORED‑LENDING SUMMARY -- 202505 MONTH
+  Two result sets in one script, separated by green‑comment
+  banners (your editor should color "--" lines green).
+==========================================================*/
+
+--=========================================================
+--  ►► 1)  LNTRANSIT = 91421
+--=========================================================
+;WITH AcctHousehold AS
+(
+    /* Map ADPAccountNumber → Household attributes */
+    SELECT  ah.ADPAccountNumber,
+            ah.TimePeriod_ID,
+            b.HouseholdKeyCurrent,
+            b.MaxHHAUAlast12MonthsCurrent,
+            ROW_NUMBER() OVER (PARTITION BY ah.ADPAccountNumber
+                               ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM    ZZR0Prod.SSE.v_M_AcctHistory         AS ah
+    JOIN    ZZR0Prod.SSE.v_M_BAMHouseholdCurrent AS b
+           ON b.HouseholdKeyCurrent = ah.HouseholdKey
+          AND b.TimePeriod_ID       = ah.TimePeriod_ID
+    WHERE   ah.TimePeriod_ID = 202505
+), AcctHouseholdDistinct AS
+(
+    SELECT  ADPAccountNumber,
+            TimePeriod_ID,
+            HouseholdKeyCurrent,
+            MaxHHAUAlast12MonthsCurrent
+    FROM    AcctHousehold
+    WHERE   rn = 1           -- keep one row per account
+)
+SELECT  i.DAINACCT           AS ADPAccountNumber,
+        i.DAINCONTRACT,                         -- Allen contract #
+        i.LNTRANSIT,
+        SUM(i.USDSpot)       AS SumUSDSpot,
+        SUM(i.LIMIT)         AS SumLimit,
+        a.HouseholdKeyCurrent,
+        a.MaxHHAUAlast12MonthsCurrent
+FROM    ZZR0Prod.Sandbox.ISRDatabase_Full  AS i
+JOIN    AcctHouseholdDistinct              AS a
+          ON a.ADPAccountNumber = i.DAINACCT
+         AND a.TimePeriod_ID    = i.LNYEARMTH
+WHERE   i.LNYEARMTH = 202505
+  AND   i.LNTRANSIT = 91421
+GROUP BY i.DAINACCT,
+         i.DAINCONTRACT,
+         i.LNTRANSIT,
+         a.HouseholdKeyCurrent,
+         a.MaxHHAUAlast12MonthsCurrent
+ORDER BY i.DAINACCT;
+
+--=========================================================
+--  ►► 2)  LNTRANSIT = 7157
+--=========================================================
+;WITH AcctHousehold AS
+(
+    /* Re‑build (or reuse a saved view/temp table) */
+    SELECT  ah.ADPAccountNumber,
+            ah.TimePeriod_ID,
+            b.HouseholdKeyCurrent,
+            b.MaxHHAUAlast12MonthsCurrent,
+            ROW_NUMBER() OVER (PARTITION BY ah.ADPAccountNumber
+                               ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM    ZZR0Prod.SSE.v_M_AcctHistory         AS ah
+    JOIN    ZZR0Prod.SSE.v_M_BAMHouseholdCurrent AS b
+           ON b.HouseholdKeyCurrent = ah.HouseholdKey
+          AND b.TimePeriod_ID       = ah.TimePeriod_ID
+    WHERE   ah.TimePeriod_ID = 202505
+), AcctHouseholdDistinct AS
+(
+    SELECT  ADPAccountNumber,
+            TimePeriod_ID,
+            HouseholdKeyCurrent,
+            MaxHHAUAlast12MonthsCurrent
+    FROM    AcctHousehold
+    WHERE   rn = 1
+)
+SELECT  i.DAINACCT           AS ADPAccountNumber,
+        i.DAINCONTRACT,
+        i.LNTRANSIT,
+        SUM(i.USDSpot)       AS SumUSDSpot,
+        SUM(i.LIMIT)         AS SumLimit,
+        a.HouseholdKeyCurrent,
+        a.MaxHHAUAlast12MonthsCurrent
+FROM    ZZR0Prod.Sandbox.ISRDatabase_Full  AS i
+JOIN    AcctHouseholdDistinct              AS a
+          ON a.ADPAccountNumber = i.DAINACCT
+         AND a.TimePeriod_ID    = i.LNYEARMTH
+WHERE   i.LNYEARMTH = 202505
+  AND   i.LNTRANSIT = 7157
+GROUP BY i.DAINACCT,
+         i.DAINCONTRACT,
+         i.LNTRANSIT,
+         a.HouseholdKeyCurrent,
+         a.MaxHHAUAlast12MonthsCurrent
+ORDER BY i.DAINACCT;
