@@ -81,3 +81,47 @@ for rect, delta in zip(bars, df["MoM"]):
 # ── 7. Final layout & show/save --------------------------------------
 plt.tight_layout(rect=[0, 0, 1, 0.92])            # leave room for title/totals
 plt.show()                                        # or fig.savefig("mom_chart.png", dpi=150)
+
+
+
+
+
+/* STEP 1 – build a household mapping table                     */
+;WITH AcctHousehold AS
+(
+    SELECT
+          ah.ADPAccountNumber                         -- account‑level key
+        , ah.TimePeriod_ID                            -- 202505 in your case
+        , b.HouseholdKeyCurrent                       -- from BAM
+        , b.MaxHHAUAlast12MonthsCurrent               -- from BAM
+        , ROW_NUMBER() OVER
+          (PARTITION BY ah.ADPAccountNumber
+           ORDER BY b.MaxHHAUAlast12MonthsCurrent DESC) AS rn
+    FROM      ZZRGProd.SSE.v_M_AcctHistory         AS ah
+    INNER JOIN ZZRGProd.SSE.v_M_BAMHouseholdCurrent AS b
+           ON b.HouseholdKeyCurrent = ah.HouseholdKey     -- note the name difference
+          AND b.TimePeriod_ID        = ah.TimePeriod_ID   -- keep the same month/yr
+    WHERE ah.TimePeriod_ID = 202505  -- or use '202505' if the column is CHAR/VARCHAR
+)
+/* keep exactly ONE row per ADPAccountNumber, even if BAM has duplicates */
+, AcctHouseholdDistinct AS
+(
+    SELECT ADPAccountNumber
+         , TimePeriod_ID
+         , HouseholdKeyCurrent
+         , MaxHHAUAlast12MonthsCurrent
+    FROM   AcctHousehold
+    WHERE  rn = 1
+)
+
+/* STEP 2 – join that back to ISRDatabase_Full                */
+SELECT      i.*                               -- all original ISR columns
+          , a.HouseholdKeyCurrent
+          , a.MaxHHAUAlast12MonthsCurrent
+FROM        ZZRGProd.Sandbox.ISRDatabase_Full AS i
+LEFT  JOIN  AcctHouseholdDistinct            AS a
+       ON   a.ADPAccountNumber = i.DAINACCT
+      AND   a.TimePeriod_ID   = i.LNYEARMTH     -- year+month alignment
+/* optional: keep the same month/yr in ISR if you only need 202505 now */
+/* WHERE       i.LNYEARMTH = 202505 */
+;
