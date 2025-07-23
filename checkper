@@ -1,70 +1,28 @@
-/*────────────────────────────────────────────────────────────────────────────
-    PARAMETERS
-  ───────────────────────────────────────────────────────────────────────────*/
-DECLARE @cutoff_months INT = 12;      -- set to 3 if you move to Blake’s shorter look‑back
+/*  ── pick a month or leave the filter out for "all months" ───────────────*/
+DECLARE @target_TimePeriod_ID INT = 202506;   -- 2025‑06 for example
+/*  comment the line above and the WHERE clause below if you want the list
+    for every month in history                                             */
 
-/*────────────────────────────────────────────────────────────────────────────
-    STEP 1 : pull month‑end history and attach the "previous month" key
-  ───────────────────────────────────────────────────────────────────────────*/
-WITH hist AS (
+/*  STEP 1 – tag the first row we ever see for each account  */
+WITH first_touch AS (
     SELECT
-        act.TimePeriod_ID,           -- surrogate key for each month‑end
-        act.Account_ID,              -- use ADPAccountNumber if preferred
-        act.ManagedAccountFlag,      -- 1 = advisory / managed, 0 = brokerage
-        act.AccountOpenDt,           -- first day the account existed
-        tp.PeriodStartDt,
-        tp.PeriodEndDt,
-        tp.PrevTimePeriod_ID
-    FROM   dbo.v_M_AcctHistory AS act
-    JOIN   dbo.DM_TimePeriod    AS tp
-           ON tp.TimePeriod_ID = act.TimePeriod_ID
-),
-
-curr_prev AS (          -- hook each row to its prior‑month status (if any)
-    SELECT
-        h.*,
-        p.ManagedAccountFlag AS Prev_ManagedAccountFlag
-    FROM   hist AS h
-    LEFT   JOIN hist AS p
-           ON  p.Account_ID    = h.Account_ID
-           AND p.TimePeriod_ID = h.PrevTimePeriod_ID
+        act.Account_ID,                     -- or ADPAccountNumber
+        act.TimePeriod_ID,
+        act.ManagedAccountFlag,
+        act.AccountOpenDt,                  -- bring it along if you need it
+        ROW_NUMBER() OVER (
+            PARTITION BY act.Account_ID
+            ORDER BY     act.TimePeriod_ID
+        ) AS rn_first_seen
+    FROM dbo.v_M_AcctHistory AS act
 )
 
-/*────────────────────────────────────────────────────────────────────────────
-    STEP 2 : classify each advisory row into the two buckets we care about
-  ───────────────────────────────────────────────────────────────────────────*/
+/*  STEP 2 – pick only those whose first row is already Managed  */
 SELECT
-    cp.TimePeriod_ID,
-    cp.Account_ID,
-    CASE
-        /* BUCKET #1 – "Same‑Month New Advisory" ***************************/
-        WHEN cp.ManagedAccountFlag = 1
-             AND NOT EXISTS ( SELECT 1
-                              FROM hist h0
-                              WHERE h0.Account_ID    = cp.Account_ID
-                                AND h0.TimePeriod_ID < cp.TimePeriod_ID )
-             AND DATEDIFF(MONTH, cp.AccountOpenDt, cp.PeriodEndDt) <= @cutoff_months
-             THEN 'SameMonth_NewAdvisory'
-
-        /* BUCKET #2 – "Converted from Brokerage Last Month" ***************/
-        WHEN cp.ManagedAccountFlag = 1
-             AND cp.Prev_ManagedAccountFlag = 0
-             THEN 'Brokerage_to_Advisory'
-
-        ELSE 'Ignore'
-    END AS AccountStatusBucket,
-
-    -- ── optional payload columns you may want for metrics / visuals ─────
-    cp.AccountOpenDt,
-    cp.PeriodStartDt,
-    cp.PeriodEndDt
-FROM   curr_prev AS cp
-WHERE  cp.ManagedAccountFlag = 1        -- focus only on advisory tonight
-  AND  (
-        /* keep only the two buckets we report on */
-        (NOT EXISTS (SELECT 1
-                     FROM hist h1
-                     WHERE h1.Account_ID    = cp.Account_ID
-                       AND h1.TimePeriod_ID < cp.TimePeriod_ID))
-     OR (cp.Prev_ManagedAccountFlag = 0)
-      );
+    Account_ID,
+    TimePeriod_ID,
+    AccountOpenDt        -- optional payload
+FROM   first_touch
+WHERE  rn_first_seen      = 1            -- very first snapshot
+  AND  ManagedAccountFlag = 1            -- already advisory
+  AND  TimePeriod_ID      = @target_TimePeriod_ID;   -- drop for "all"
