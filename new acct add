@@ -222,3 +222,161 @@ with pd.ExcelWriter(OUTPUT_PATH, engine='openpyxl', mode='w') as writer:
 
 print(f"✅  Flows table built and saved to {OUTPUT_PATH}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+import pandas as pd
+from pathlib import Path
+
+# ------------------------------------------------------------------
+# 1. File locations
+# ------------------------------------------------------------------
+BROKERAGE_ADV_PATH = Path(r"C:\Users\iams395\Brokerage_Advisory.xlsx")
+OUTPUT_PATH        = Path(r"C:\Users\iams395\Number_of_Accounts_Report.xlsx")
+
+# ------------------------------------------------------------------
+# 2. Bring other source tables into scope  (uncomment if needed)
+# ------------------------------------------------------------------
+# df_all_managedaccount      = pd.read_excel(r"C:\path_to\All_Managed_Accounts.xlsx")
+# df_instant_advisory_counts = pd.read_excel(r"C:\path_to\Instant_Advisory_Counts.xlsx")
+
+# ------------------------------------------------------------------
+# 3. Helpers -------------------------------------------------------
+# ------------------------------------------------------------------
+def clean_cols(df: pd.DataFrame) -> None:
+    """Lower‑case, strip spaces/#, convert to snake_case."""
+    df.columns = (
+        df.columns
+          .str.strip()
+          .str.lower()
+          .str.replace(' ', '_')
+          .str.replace('#', '', regex=False)
+    )
+
+def normalise_period(col: pd.Series) -> pd.Series:
+    """
+    Ensure values look like '201512', **not** '201512.0'.
+    Works whether col is object, float or int.
+    """
+    return (
+        col.astype(str)
+           .str.replace(r'\.0$', '', regex=True)  # drop trailing ".0"
+           .str.zfill(6)                          # pad to 6 chars if needed
+    )
+
+def first_or_nan(series: pd.Series):
+    """Return first element if present, else pd.NA."""
+    return series.iloc[0] if not series.empty else pd.NA
+
+# ------------------------------------------------------------------
+# 4. Load / clean Brokerage‑Advisory
+# ------------------------------------------------------------------
+df_ba = pd.read_excel(BROKERAGE_ADV_PATH)
+clean_cols(df_ba)
+df_ba.rename(columns={'accts': 'brokerage_to_advisory'}, inplace=True)
+df_ba['timeperiod_id']         = normalise_period(df_ba['timeperiod_id'])
+df_ba['brokerage_to_advisory'] = pd.to_numeric(
+    df_ba['brokerage_to_advisory'], errors='coerce'
+)
+
+# ------------------------------------------------------------------
+# 5. Clean the other tables
+# ------------------------------------------------------------------
+clean_cols(df_all_managedaccount)
+df_all_managedaccount['timeperiod_id'] = normalise_period(
+    df_all_managedaccount['timeperiod_id']
+)
+
+clean_cols(df_instant_advisory_counts)
+df_instant_advisory_counts['timeperiod_id'] = normalise_period(
+    df_instant_advisory_counts['timeperiod_id']
+)
+
+# Resolve column names that can vary
+acct_col   = (
+    'managed_accounts'
+    if 'managed_accounts' in df_all_managedaccount.columns
+    else 'accounts'
+)
+new_adv_col = (
+    'newadvisoryaccounts'
+    if 'newadvisoryaccounts' in df_instant_advisory_counts.columns
+    else ('new_advisory_accounts'
+          if 'new_advisory_accounts' in df_instant_advisory_counts.columns
+          else None)
+)
+
+# ------------------------------------------------------------------
+# 6. Build the flows matrix
+# ------------------------------------------------------------------
+periods  = sorted(df_all_managedaccount['timeperiod_id'].unique())
+records  = []
+
+for i in range(len(periods) - 1):
+    period, next_period = periods[i], periods[i + 1]
+
+    begin_accts = df_all_managedaccount.loc[
+        df_all_managedaccount['timeperiod_id'] == period, acct_col
+    ].iat[0]
+
+    end_accts = df_all_managedaccount.loc[
+        df_all_managedaccount['timeperiod_id'] == next_period, acct_col
+    ].iat[0]
+
+    # Optional – new advisory counts
+    new_adv = (
+        first_or_nan(
+            df_instant_advisory_counts.loc[
+                df_instant_advisory_counts['timeperiod_id'] == next_period,
+                new_adv_col
+            ]
+        ) if new_adv_col else pd.NA
+    )
+
+    # Required – brokerage → advisory
+    brk_to_adv = first_or_nan(
+        df_ba.loc[
+            df_ba['timeperiod_id'] == next_period, 'brokerage_to_advisory'
+        ]
+    )
+
+    records.append({
+        'timeperiod_id'            : next_period,
+        'Beginning # of Accounts'  : begin_accts,
+        'New Advisory Accounts'    : new_adv,
+        'Brokerage to Advisory'    : brk_to_adv,
+        'Closed Account'           : pd.NA,
+        'Brokerage to Brokerage'   : pd.NA,
+        'Advisory to Brokerage'    : pd.NA,
+        'Advisory Closed'          : pd.NA,
+        'Ending # of Accounts'     : end_accts
+    })
+
+flows_df = pd.DataFrame(records).set_index('timeperiod_id').T
+
+# ------------------------------------------------------------------
+# 7. Write to Excel **without killing other sheets**
+# ------------------------------------------------------------------
+# If the file exists, append; otherwise create.
+writer_mode = 'a' if OUTPUT_PATH.exists() else 'w'
+
+with pd.ExcelWriter(
+    OUTPUT_PATH,
+    engine='openpyxl',
+    mode=writer_mode,
+    if_sheet_exists='replace'     # only replace the two sheets we write
+) as writer:
+    flows_df.to_excel(writer, sheet_name='Flows UAT Draft1')
+    df_ba.to_excel(writer,   sheet_name='Brokerage Advisory', index=False)
+
+print(f"✅  Flows UAT Draft1 & Brokerage Advisory written to "
+      f"{OUTPUT_PATH} (other sheets preserved)")
