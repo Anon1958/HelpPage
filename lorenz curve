@@ -1,0 +1,128 @@
+# -------------------------------------------------------------------
+# 0.  Libraries
+# -------------------------------------------------------------------
+import pandas as pd
+import numpy as np
+from sqlalchemy import create_engine          # already in your env
+from sklearn.ensemble import IsolationForest
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# -------------------------------------------------------------------
+# 1.  Pull the UHNW 20 MM+ dataset
+# -------------------------------------------------------------------
+query_20mm = """
+SELECT
+    BAM.TimePeriod_ID,
+    Acct.HouseholdKey,
+    COUNT(DISTINCT Acct.ADPAccountNumber)          AS Accounts,
+    BAM.HHNewStatusCurrent,
+    SUM(CASE WHEN BAM.HHRecruitTTPCurrent >= '202407' THEN 1 ELSE 0 END) AS RecruitFlag,
+    SUM(Acct.TotalAUA)                             AS AUA,
+    SUM(Acct.NNA_prev)                             AS PrevAUA,
+    SUM(CASE WHEN Acct.ManagedAccountFlag = '0' THEN Acct.TotalAUA ELSE 0 END) AS BrokAUA,
+    SUM(CASE WHEN Acct.ManagedAccountFlag = '1' THEN Acct.TotalAUA ELSE 0 END) AS ManagedAUA,
+    SUM(Acct.EquityAUA)                            AS EquityAUA,
+    SUM(Acct.TotalFixedBondAUA)                    AS FixedIncomeAUA,
+    SUM(Acct.TotalMutualFundAUA)                   AS MutualFundAUA,
+    SUM(Acct.AnnuityAUA)                           AS AnnuityAUA,
+    SUM(Acct.AlternativeInvestmentAUA)             AS AltsAUA,
+    SUM(CASE WHEN Acct.ClientAccountType = 'T' THEN Acct.TotalAUA ELSE 0 END) AS TrustAUA,
+    SUM(Acct.Trail12MonthCommissionBalance)        AS T12Gross,
+    SUM(Acct.Trail12MonthManagedAccountFees)       AS T12Managed,
+    SUM(Acct.Trail12MonthMutualFundTrails)         AS T12MFTrails,
+    SUM(Acct.Trail12MonthAnnuityTrails)            AS T12AnnuityTrails
+FROM   ZZRPProd.SSE_v_M_BAMHouseholdCurrent BAM
+JOIN   ZZRPProd.SSE_v_M_AcctHistory        Acct ON  Acct.HouseholdKey  = BAM.HouseholdKeyCurrent
+                                              AND Acct.TimePeriod_ID   = BAM.TimePeriod_ID
+JOIN   ZZRPProd.SSE_v_M_NnaAcctHist        NNA  ON  NNA.ADPAccountNumber = Acct.ADPAccountNumber
+                                              AND NNA.TimePeriod_ID     = Acct.TimePeriod_ID
+WHERE  BAM.TimePeriod_ID                = '202506'
+  AND  BAM.MaxHHUALast12MonthsCurrent   >  20000000      -- 20 MM+ households
+  AND  Acct.ActiveFlag                  = '1'
+  AND  Acct.RegionName                 <> 'PCG Other'
+  AND  Acct.FirmTypeCode                = 'R'
+GROUP BY
+    BAM.TimePeriod_ID,
+    Acct.HouseholdKey,
+    BAM.HHNewStatusCurrent
+"""
+
+df = pd.read_sql_query(query_20mm, engine)
+print(f"Pulled {len(df):,} UHNW rows")
+
+# -------------------------------------------------------------------
+# 2.  Feature engineering
+# -------------------------------------------------------------------
+# Revenue (last 12 months)
+rev_cols = ["T12Gross", "T12Managed", "T12MFTrails", "T12AnnuityTrails"]
+df["revenue"]    = df[rev_cols].sum(axis=1, skipna=True)
+
+# Basis‑point margin earned
+df["bps_earned"] = df["revenue"] / df["AUA"].replace(0, np.nan) * 10_000     # revenue per $1 AuA
+
+# Product‑mix percentages
+product_map = {
+    "equity"      : "EquityAUA",
+    "fixedincome" : "FixedIncomeAUA",
+    "alts"        : "AltsAUA",
+    "mutualfund"  : "MutualFundAUA",
+    "annuity"     : "AnnuityAUA",
+    "managed"     : "ManagedAUA",
+    "brokerage"   : "BrokAUA",
+    "trust"       : "TrustAUA",
+}
+for p, col in product_map.items():
+    df[f"pct_{p}"] = df[col] / df["AUA"].replace(0, np.nan)
+
+df["pct_cash"] = 1 - df[[f"pct_{p}" for p in product_map]].sum(axis=1)
+
+# -------------------------------------------------------------------
+# 3.  Under‑earning outlier detection (Isolation Forest)
+# -------------------------------------------------------------------
+iso   = IsolationForest(contamination=0.05, random_state=42)
+df["outlier_flag"] = iso.fit_predict(df[["bps_earned"]].fillna(0))      # -1 = under‑earning
+under_earners      = df[df["outlier_flag"] == -1]
+
+# -------------------------------------------------------------------
+# 4.  Household segmentation (K‑Means, 6 clusters)
+# -------------------------------------------------------------------
+feature_cols = (["bps_earned", "Accounts", "RecruitFlag"]
+                + [f"pct_{p}" for p in product_map] + ["pct_cash"])
+X           = df[feature_cols].fillna(0)
+X_scaled    = StandardScaler().fit_transform(X)
+
+kmeans      = KMeans(n_clusters=6, random_state=42, n_init="auto")
+df["cluster"] = kmeans.fit_predict(X_scaled)
+
+# -------------------------------------------------------------------
+# 5.  Revenue‑Efficiency Gap by cluster
+# -------------------------------------------------------------------
+clust = (df.groupby("cluster")
+           .agg(cluster_aua      = ("AUA",     "sum"),
+                cluster_revenue  = ("revenue", "sum")))
+clust["aua_share"] = clust["cluster_aua"]     / clust["cluster_aua"].sum()
+clust["rev_share"] = clust["cluster_revenue"] / clust["cluster_revenue"].sum()
+clust["gap_pp"]    = (clust["rev_share"] - clust["aua_share"]) * 100   # percentage‑points
+
+# -------------------------------------------------------------------
+# 6.  Bar‑chart visuals
+# -------------------------------------------------------------------
+plt.figure(figsize=(8, 4))
+colors = ["red" if g < 0 else "grey" for g in clust["gap_pp"].sort_values()]
+clust["gap_pp"].sort_values().plot(kind="barh", color=colors)
+plt.axvline(0, linewidth=0.8, color="black")
+plt.xlabel("Revenue Share – AuA Share (percentage points)")
+plt.title("Revenue‑Efficiency Gap by Cluster")
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(8, 4))
+(under_earners.groupby("cluster").size()
+              .reindex(clust.index, fill_value=0)
+              .plot(kind="barh", color="red"))
+plt.title("Under‑Earning Households per Cluster")
+plt.xlabel("Count of Margin Outliers")
+plt.tight_layout()
+plt.show()
