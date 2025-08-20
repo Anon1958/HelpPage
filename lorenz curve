@@ -126,3 +126,76 @@ plt.title("Under‑Earning Households per Cluster")
 plt.xlabel("Count of Margin Outliers")
 plt.tight_layout()
 plt.show()
+
+
+
+m
+
+
+# --- DF25: Max-12 >= 20M but Current AUA < 10M (all fields) ---
+
+query25 = """
+WITH HouseholdAggregated AS (
+    Select
+        BAM.TimePeriod_ID,
+        Acct.HouseholdKey,
+        Count(distinct Acct.ADPAccountNumber) as Accounts,
+        BAM.HHNewStatusReported,
+        Count(case when BAM.HHRepRecruitTPReported >= '202408' then 1 else NULL end) as RecruitFlag,
+
+        -- Current & prior AUA + splits
+        Sum(Acct.TotalAUA) as AUA,
+        Sum(NNA.AUA_prev) as PrevAUA,
+        Sum(case when Acct.ManagedAccountFlag = '0' then NNA.AUA_prev else 0 end) as Prev_Brok_AUA,
+        Sum(case when Acct.ManagedAccountFlag = '0' then Acct.TotalAUA else 0 end) as BrokAUA,
+        Sum(case when Acct.ManagedAccountFlag = '1' then Acct.TotalAUA else 0 end) as ManagedAUA,
+
+        -- Composition
+        Sum(Acct.EquityAUA) as EquityAUA,
+        Sum(Acct.TotalFixedBondAUA) as FixedIncomeAUA,
+        Sum(Acct.TotalMutualFundAUA) as MutualFundAUA,
+        Sum(Acct.AnnuityAUA) as AnnuityAUA,
+        Sum(Acct.AlternativeInvestmentAUA) as AltsAUA,
+        Sum(Case When Acct.ClientAccountType = 'T' then Acct.TotalAUA else 0 end) as TrustAUA,
+
+        -- Trails / T12
+        Sum(Acct.Trail12MonthCommissionBalance) as T12Gross,
+        Sum(Acct.Trail12MonthManagedAccountFees) as T12Managed,
+        Sum(Acct.Trail12MonthMutualFundTrails) as T12_MFTrails,
+        Sum(Acct.Trail12MonthAnnuityTrails) as T12_AnnuityTrails,
+
+        -- Max last 12 months (reported)
+        BAM.MaxHHAUALast12MonthsReported
+
+    From ZZRProd.SSE.v_M_BAMHouseholdReported as BAM
+    Inner Join ZZRProd.SSE.v_M_AcctHistory as Acct
+        on BAM.TimePeriod_ID = Acct.TimePeriod_ID
+       and Acct.HouseholdKey = BAM.HouseholdkeyReported
+    Inner Join ZZRProd.SSE.v_M_NNAAcctHIST as NNA
+        on NNA.Timeperiod_ID = Acct.TimePeriod_ID
+       and NNA.ADPAccountNumber = Acct.ADPAccountNumber
+
+    Where BAM.TimePeriod_ID = '202507'
+      and BAM.MaxHHAUALast12MonthsReported > '20000000'
+      and Acct.ActiveFlag = '1'
+      and Acct.RegionName <> 'PCG Other'
+      and Acct.FirmTypeCode = 'R'
+
+    Group by
+        BAM.TimePeriod_ID,
+        Acct.HouseholdKey,
+        BAM.HHNewStatusReported,
+        BAM.MaxHHAUALast12MonthsReported
+)
+-- Only those that FAIL the 10M current AUA floor
+SELECT *
+FROM HouseholdAggregated
+WHERE AUA < 10000000;
+"""
+
+df25 = pd.read_sql_query(query25, engine)
+print(f"Query25 returned {len(df25):,} rows")
+df25.head()
+
+# Optional: save a CSV to attach to your email
+# df25.to_csv(f"UHNW_PushedDown_{df25['TimePeriod_ID'].iloc[0] if not df25.empty else 'NA'}.csv", index=False)
