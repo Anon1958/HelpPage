@@ -211,3 +211,5 @@ df25.head()
  TEXT(ABS($I19)/1000,"$0.0") & " million on " &
  IF($I19>0,"lower ","higher ") & $B19
 )
+
+=IF(OR($I19=0,$B19="",LEFT($B19,5)="Total"),"",IF($I19>0,"Favorable","Unfavorable")&" by "&TEXT(ABS($I19)/1000,"$0.0")&" million on "&IF($I19>0,"lower ","higher ")&$B19)
