@@ -250,3 +250,6 @@ df25.head()
 
 
 =LET(s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),base,TRIM(TEXTAFTER(s," on ")),item,IF(LEFT(base,6)="lower ",MID(base,7,999),IF(LEFT(base,7)="higher ",MID(base,8,999),base)),vr,$B$15:$B$66,visMask,SUBTOTAL(103,OFFSET($B$15,ROW(vr)-ROW($B$15),0)),vis,TRIM(FILTER(vr,visMask)),ban,(LEFT(item,5)="Total")+ISNUMBER(MATCH(item,{"Employee-Related Expense","Other Direct Expenses","Volume-Based Expenses","Technology & Functions"},0))>0,keep,(s<>"")*(amt>0)*ISNUMBER(MATCH(item,vis,0))*NOT(ban),TAKE(SORTBY(FILTER(s,keep),FILTER(amt,keep),-1),7))
+
+
+=LET(s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),base,TRIM(TEXTAFTER(s," on ")),item,LET(x,base,IF(LEFT(x,6)="lower ",MID(x,7,999),IF(LEFT(x,7)="higher ",MID(x,8,999),x))),vr,$B$15:$B$66,visMask,SUBTOTAL(103,OFFSET($B$15,ROW(vr)-ROW($B$15),0)),vis,TRIM(FILTER(vr,visMask)),allowed,FILTER(vis,LEFT(vis,5)<>"Total"),keep,(s<>"")*(amt>0)*ISNUMBER(MATCH(item,allowed,0)),TAKE(SORTBY(FILTER(s,keep),FILTER(amt,keep),-1),7))
