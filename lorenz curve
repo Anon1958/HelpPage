@@ -217,3 +217,9 @@ df25.head()
 
 
 =LET(t,$B$99:$B$150,v,$I$99:$I$150,mk,(t<>"")*(ABS(v)>0),TAKE(SORTBY(FILTER(IF(v>0,"• Favorable","• Unfavorable")&" by "&TEXT(ABS(v)/1000,"$0.0")&" million on "&IF(v>0,"lower ","higher ")&t,mk),FILTER(ABS(v),mk),-1),7))
+
+
+
+
+
+=LET(s,$B$99:$B$150,mk,s<>"",amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),TAKE(SORTBY(FILTER(s,mk),FILTER(amt,mk),-1),7))
