@@ -213,3 +213,7 @@ df25.head()
 )
 
 =IF(OR($I19=0,$B19="",LEFT($B19,5)="Total"),"",IF($I19>0,"Favorable","Unfavorable")&" by "&TEXT(ABS($I19)/1000,"$0.0")&" million on "&IF($I19>0,"lower ","higher ")&$B19)
+
+
+
+=LET(t,$B$99:$B$150,v,$I$99:$I$150,mk,(t<>"")*(ABS(v)>0),TAKE(SORTBY(FILTER(IF(v>0,"• Favorable","• Unfavorable")&" by "&TEXT(ABS(v)/1000,"$0.0")&" million on "&IF(v>0,"lower ","higher ")&t,mk),FILTER(ABS(v),mk),-1),7))
