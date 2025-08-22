@@ -225,4 +225,8 @@ df25.head()
 =LET(s,$B$99:$B$150,mk,s<>"",amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),TAKE(SORTBY(FILTER(s,mk),FILTER(amt,mk),-1),7))
 
 
-=IFERROR(UNICHAR(8226)&" "&INDEX($E$99:$E$150,ROW(A1)),"")
+=IFERROR(UNICHAR(8226)&" "&INDEX($E$99:$E$150,ROW(A1)),"") No
+
+
+
+=IFERROR(UNICHAR(8226)&" "&INDEX($E$99#,ROWS(B$6:B6)),"")
