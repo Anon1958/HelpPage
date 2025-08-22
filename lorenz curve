@@ -199,3 +199,15 @@ df25.head()
 
 # Optional: save a CSV to attach to your email
 # df25.to_csv(f"UHNW_PushedDown_{df25['TimePeriod_ID'].iloc[0] if not df25.empty else 'NA'}.csv", index=False)
+
+
+
+
+
+
+
+=IF(OR($I19=0,$B19=""),"",
+ IF($I19>0,"Favorable","Unfavorable") & " by " &
+ TEXT(ABS($I19)/1000,"$0.0") & " million on " &
+ IF($I19>0,"lower ","higher ") & $B19
+)
