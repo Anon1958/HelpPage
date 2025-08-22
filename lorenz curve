@@ -243,3 +243,5 @@ df25.head()
 =LET(s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),tmp,TRIM(TEXTAFTER(s," on ")),item,LET(x,tmp,IF(LEFT(x,6)="lower ",MID(x,7,999),IF(LEFT(x,7)="higher ",MID(x,8,999),x))),vis,TRIM($B$15:$B$66),roll,{"Employee-Related Expense","Other Direct Expenses","Volume-Based Expenses","Technology & Functions","Total Operations NIE","Total Operations Allocation","Net Intergroup Allocations"},mk,(s<>"")*(amt>0)*ISNUMBER(MATCH(item,vis,0))*ISNA(MATCH(item,roll,0)),TAKE(SORTBY(FILTER(s,mk),FILTER(amt,mk),-1),7))
 
 
+
+=IFERROR(UNICHAR(8226)&" "&INDEX(FILTER($E$95:$E$150,$E$95:$E$150<>""),ROWS(B$6:B6)),"")
