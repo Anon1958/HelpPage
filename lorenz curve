@@ -230,3 +230,6 @@ df25.head()
 
 
 =IFERROR(UNICHAR(8226)&" "&INDEX($E$99#,ROWS(B$6:B6)),"")
+
+
+=LET(s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),ex,(ISNUMBER(SEARCH("Employee-Related Expense",s))+ISNUMBER(SEARCH("Other Direct Expenses",s))+ISNUMBER(SEARCH("Volume-Based Expenses",s))+ISNUMBER(SEARCH("Technology & Functions",s))+ISNUMBER(SEARCH("Total ",s))+ISNUMBER(SEARCH("Net Intergroup Allocations",s)))>0,mk,(s<>"")*(amt>0)*NOT(ex),TAKE(SORTBY(FILTER(s,mk),FILTER(amt,mk),-1),7))
