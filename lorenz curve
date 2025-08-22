@@ -264,3 +264,7 @@ df25.head()
 
 
 =IFERROR(UNICHAR(8226)&" "&INDEX(FILTER($E$95:$E$150,$E$95:$E$150<>""),ROWS(B$6:B6)),"")
+
+
+
+=LET(s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),raw,TRIM(TEXTAFTER(s," on ")),itm,LET(x,raw,IF(LEFT(x,6)="lower ",MID(x,7,999),IF(LEFT(x,7)="higher ",MID(x,8,999),x))),vr,$B$15:$B$66,visMask,SUBTOTAL(103,OFFSET($B$15,ROW(vr)-ROW($B$15),0)),vis,TRIM(FILTER(vr,visMask)),allowed,FILTER(vis,(LEFT(vis,5)<>"Total")*ISNA(MATCH(vis,{"Employee-Related Expense","Other Direct Expenses","Volume-Based Expenses","Technology & Functions"},0))),banned,{"Net CM Allocations","WM Ops Head Office Allocations","Other Expenses (excluding Vol-Based)"},keep,(s<>"")*(amt>0)*ISNUMBER(MATCH(itm,allowed,0))*ISNA(MATCH(itm,banned,0)),TAKE(SORTBY(FILTER(s,keep),FILTER(amt,keep),-1),7))
