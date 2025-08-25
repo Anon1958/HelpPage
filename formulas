@@ -4,3 +4,5 @@
 
 
 =IFERROR(UNICHAR(8226)&" "&INDEX(FILTER($E$95:$E$150,$E$95:$E$150<>""),ROWS(B$6:B6)),"")
+
+=LET(lst,FILTER($E$95:$E$150,$E$95:$E$150<>""),amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(lst,"$")," million")),0),sgn,IF(LEFT(lst,1)="F",1,-1),sumM,SUM(sgn*amt),target,$I$68/1000,delta,sumM-target,IF(ABS(delta)<=0.2,"OK – commentary totals "&TEXT(sumM,"$0.0")&"m vs header "&TEXT(target,"$0.0")&"m (Δ "&TEXT(delta,"$0.0")&"m; within ±$0.2m)","ADJUST – commentary totals "&TEXT(sumM,"$0.0")&"m vs header "&TEXT(target,"$0.0")&"m (Δ "&TEXT(delta,"$0.0")&"m; outside ±$0.2m)"))
