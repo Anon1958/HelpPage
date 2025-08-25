@@ -1,1 +1,6 @@
 =LET(N,10,s,$B$95:$B$146,amt,IFERROR(VALUE(TEXTBEFORE(TEXTAFTER(s,"$")," million")),0),sign,IF(LEFT(s,1)="F",1,-1),base,TRIM(TEXTAFTER(s," on ")),itmRaw,LET(x,base,IF(LEFT(x,6)="lower ",MID(x,7,999),IF(LEFT(x,7)="higher ",MID(x,8,999),x))),canon,LET(y,itmRaw,IF(ISNUMBER(SEARCH("Allocations to CM",y)),"Net CM Allocations",IF(ISNUMBER(SEARCH("Head Office Allocations",y)),"WM Ops Head Office Allocations",IF(ISNUMBER(SEARCH("Intergroup Allocations",y)),"Net Intergroup Allocations",y)))),vr,$B$15:$B$66,visMask,SUBTOTAL(103,OFFSET($B$15,ROW(vr)-ROW($B$15),0)),vis,TRIM(FILTER(vr,visMask)),allowed,FILTER(vis,(LEFT(vis,5)<>"Total")*ISNA(MATCH(vis,{"Employee-Related Expense","Other Direct Expenses","Volume-Based Expenses","Technology & Functions","Net CM Allocations","WM Ops Head Office Allocations"},0))),keep,(s<>"")*(amt>0)*ISNUMBER(MATCH(canon,allowed,0)),dispItem,IF(canon="Net Intergroup Allocations","Net of Capital Markets Allocations",canon),sent,IF(canon="Net Intergroup Allocations",IF(sign=1,"Favorable by ","Unfavorable by ")&TEXT(amt,"$0.0")&" million on "&dispItem,s),signed,sign*amt,TAKE(SORTBY(FILTER(sent,keep),FILTER(signed,keep),-1),N))
+
+
+
+
+=IFERROR(UNICHAR(8226)&" "&INDEX(FILTER($E$95:$E$150,$E$95:$E$150<>""),ROWS(B$6:B6)),"")
