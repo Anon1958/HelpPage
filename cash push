@@ -1,0 +1,51 @@
+DECLARE @NumPeriods  int  = 12;
+DECLARE @LatestPeriodID int;
+
+-- Latest yyyymm available in the account history (already an int, sargable)
+SELECT @LatestPeriodID = MAX(ah.TimePeriod_ID)
+FROM ZZRProd.SSE_v_M_AcctHistory ah
+WHERE ah.ADPAccountNumber LIKE '3%'
+  AND ah.ManagedAccountFlag = '1'
+  AND ah.ActiveFlag = '1';
+
+-- Convert to real dates for sargable filters
+DECLARE @EndDate   date = EOMONTH(DATEFROMPARTS(@LatestPeriodID/100, @LatestPeriodID%100, 1));
+DECLARE @StartDate date = DATEADD(MONTH, -(@NumPeriods-1), DATEFROMPARTS(YEAR(@EndDate), MONTH(@EndDate), 1));
+
+DECLARE @EarliestPeriodID int = YEAR(@StartDate) * 100 + MONTH(@StartDate);
+
+WITH Base AS
+(
+    SELECT
+        ah.ADPAccountNumber,
+        ah.TimePeriod_ID,
+        cs.SecurityGrouping,
+        cs.SecurityAUA,                -- keep original type, cast later
+        cs.DataAsOf,
+        ROW_NUMBER() OVER
+        (
+          PARTITION BY ah.ADPAccountNumber, ah.TimePeriod_ID
+          ORDER BY cs.DataAsOf DESC
+        ) AS rn
+    FROM ZZRProd.SSE_v_M_AcctHistory ah
+    INNER JOIN ZZRProd.dbo.CashSweepAccount cs
+      ON cs.ADPAccountNumber = ah.ADPAccountNumber
+     -- sargable date band: only rows for the last 12 months by actual dates
+     AND cs.DataAsOf >= @StartDate
+     AND cs.DataAsOf <  DATEADD(MONTH, 1, @EndDate)
+
+    WHERE ah.ADPAccountNumber LIKE '3%'
+      AND ah.ManagedAccountFlag = '1'
+      AND ah.ActiveFlag = '1'
+      AND ah.TimePeriod_ID BETWEEN @EarliestPeriodID AND @LatestPeriodID
+
+      -- IMPORTANT: do NOT CAST/CONVERT cs.DataAsOf in WHERE clauses
+)
+SELECT
+    b.SecurityGrouping,
+    b.TimePeriod_ID,
+    SUM(CAST(b.SecurityAUA AS float)) AS SecurityAUA
+FROM Base b
+WHERE b.rn = 1             -- keep only the latest DataAsOf per account per month
+GROUP BY b.SecurityGrouping, b.TimePeriod_ID
+ORDER BY b.TimePeriod_ID DESC, b.SecurityGrouping;
