@@ -49,3 +49,16 @@ FROM Base b
 WHERE b.rn = 1             -- keep only the latest DataAsOf per account per month
 GROUP BY b.SecurityGrouping, b.TimePeriod_ID
 ORDER BY b.TimePeriod_ID DESC, b.SecurityGrouping;
+
+
+
+
+Since starting in January, I met or exceeded every defined goal and added measurable value beyond my core assignments. When two more-senior teammates left/went on leave, I absorbed their key reports and responsibilities, maintained all cadences without misses, and then improved the underlying queries, documentation, and automation so delivery is faster and more resilient.
+
+Data quality & definitions. Surfaced and resolved source/logic issues across Cash, Credit, UHNW, and Trust flows; implemented cross-checks and validation steps that improved accuracy and reduced rework.
+Advanced data pulls. Bridged business context and technology to produce complete views from less-documented sources; decomposed complex Alteryx workflows; wrote maintainable SQL/Python to organize multi-source datasets.
+Performance & automation. Streamlined SQL and downstream processes to materially reduce refresh times and improve report formatting; automated recurring extracts, QC steps, and hand-offs; added peer/benchmark metrics.
+Business continuity & ownership. Stabilized reporting during turnover; created runbooks, added code comments, and documented procedures; partnered across teams and communicated early to keep deadlines intact.
+Growth mindset. While continuing to deepen RBC-specific knowledge, I bring strong SQL/Python/Excel skills, attention to detail, and a can-do approach focused on the best, most efficient solution.
+
+Collectively, these efforts increased speed, reliability, and stakeholder trust. Based on the scope and impact outlined, I believe this year’s performance meets the bar for Exceeded and I welcome calibration.
