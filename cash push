@@ -233,3 +233,317 @@ try:
 except Exception as e:
     # Non-fatal; you still get printed summary in VS Code
     print(f"\nNOTE: Could not write to Excel ({e}). The summary above is still valid.")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # ===============================================================
+# Build "exact cell contents" summary and write to Excel + console
+# ===============================================================
+import re
+import numpy as np
+import pandas as pd
+
+# ---------- CONFIG ----------
+EXCEL_PATH = r"Z:\FinData\Common\FP&A\Product\Cash Programs\Data\Waterfall\9.15.25\waterfallupdate.xlsx"
+SHEET_NAME = "Summary_PY_ExactCells"   # new sheet we will create/replace
+AS_OF_LABEL = "June 11th, 2025"        # label shown in the two navy rows in your sheet
+DISPLAY_UNITS = "B"                    # "B" for billions, "M" for millions, "raw" for no scaling
+ROUND_DECIMALS = 1                     # decimals for CNB/RBC/3rd/Total outputs
+# Fixed row/column placement to mimic your sheet (do not need to change)
+TOP_HEADER_ROW = 8                     # row where the top table headers go
+TOP_DATA_START = TOP_HEADER_ROW + 2    # first category row
+MID_START_ROW  = TOP_DATA_START + 6 + 3  # after 6 categories + 3 spacer rows
+BOT_START_ROW  = MID_START_ROW + 4 + 3   # after 2 rows + 1 total + 3 spacer rows
+
+ACCOUNT_ORDER = [
+    "Trust",
+    "Single",
+    "Corporation/Association",
+    "Employee Benefit Plan Accounts",
+    "Retirement",
+    "Joint",
+]
+
+# ---------- helpers to resolve columns (tolerant to spelling) ----------
+def _norm(s: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '', str(s).lower())
+
+def find_col(df: pd.DataFrame, *aliases: str) -> str:
+    norm_cols = {_norm(c): c for c in df.columns}
+    for a in aliases:
+        k = _norm(a)
+        if k in norm_cols:
+            return norm_cols[k]
+    raise KeyError(f"None of {aliases} found. Columns: {list(df.columns)}")
+
+# Resolve base columns in df2
+acct_col  = find_col(df2, 'FDIC Account Category', 'Fdic Account Category', 'Account Category')
+ins_col   = find_col(df2, 'Insurance Limit', 'Insurance_Limit')
+cov_col   = find_col(df2, 'Coverage Limit', 'Overage Limit', 'Coverage_Limit', 'Overage_Limit')
+cnb_col   = find_col(df2, 'City National Bank Balance', 'CNB', 'City National Bank')
+rbc_col   = find_col(df2, 'Bank of Georgia Balance', 'RBC Bank', 'RBC', 'Georgia', 'Bank of Georgia')
+third_col = find_col(df2, 'Third_Parties', 'Third Parties', '3rd Party Banks')
+
+over_cnb_col   = find_col(df2, 'Overage_CNB', 'CNB Overage', 'CNB Uninsured')
+over_rbc_col   = find_col(df2, 'Overage_Georgia', 'RBC Overage', 'Georgia Overage', 'RBC Uninsured')
+over_third_col = find_col(df2, 'Overage_Third_Parties', 'Third Parties Overage', '3rd Party Overage')
+
+# Display scaling for the *value* columns (not limits)
+if DISPLAY_UNITS.upper() == "B":
+    SCALE = 1e9
+elif DISPLAY_UNITS.upper() == "M":
+    SCALE = 1e6
+else:
+    SCALE = 1.0
+
+# ---------- Section 1: by Account Category ----------
+grp = (
+    df2.groupby(acct_col, dropna=False)
+       .agg({
+           ins_col: "max",
+           cov_col: "max",
+           cnb_col: "sum",
+           rbc_col: "sum",
+           third_col: "sum"
+       })
+       .rename(columns={
+           ins_col: "Insurance Limit",
+           cov_col: "Coverage Limit",
+           cnb_col: "CNB",
+           rbc_col: "RBC Bank",
+           third_col: "3rd Party Banks"
+       })
+)
+
+# ensure all categories appear
+for cat in ACCOUNT_ORDER:
+    if cat not in grp.index:
+        grp.loc[cat] = 0
+
+grp = grp.loc[ACCOUNT_ORDER]
+grp["Total"] = grp["CNB"] + grp["RBC Bank"] + grp["3rd Party Banks"]
+
+# scaled copy for CNB/RBC/3rd/Total
+value_cols = ["CNB", "RBC Bank", "3rd Party Banks", "Total"]
+grp_scaled = grp.copy()
+grp_scaled[value_cols] = grp_scaled[value_cols] / SCALE
+
+top_totals = {
+    "CNB":        grp_scaled["CNB"].sum(),
+    "RBC Bank":   grp_scaled["RBC Bank"].sum(),
+    "3rd Party":  grp_scaled["3rd Party Banks"].sum(),
+    "Total":      grp_scaled["Total"].sum()
+}
+
+# ---------- Section 2: Uninsured / Insured ----------
+tot_cnb   = df2[cnb_col].sum()   / SCALE
+tot_rbc   = df2[rbc_col].sum()   / SCALE
+tot_third = df2[third_col].sum() / SCALE
+
+un_cnb   = df2[over_cnb_col].sum()   / SCALE
+un_rbc   = df2[over_rbc_col].sum()   / SCALE
+un_third = df2[over_third_col].sum() / SCALE
+
+ins_cnb   = tot_cnb   - un_cnb
+ins_rbc   = tot_rbc   - un_rbc
+ins_third = tot_third - un_third
+
+mid_rows = {
+    "Uninsured": {"CNB": un_cnb, "RBC Bank": un_rbc, "3rd Party": un_third},
+    "Insured":   {"CNB": ins_cnb, "RBC Bank": ins_rbc, "3rd Party": ins_third},
+}
+mid_rows["Uninsured"]["Total"] = sum(mid_rows["Uninsured"].values())
+mid_rows["Insured"]["Total"]   = sum(mid_rows["Insured"].values())
+
+# ---------- Section 3: Bank tiers from W/X/Y ----------
+# Ensure df_enriched exists (with '1','2','20'); if not, compute
+if not all(c in df_enriched.columns for c in ['1','2','20']):
+    df_enriched = add_wxynz_columns(df2)
+
+bank1_total = df_enriched['1'].sum()   / SCALE
+bank2_total = df_enriched['2'].sum()   / SCALE
+bank3_20_total = df_enriched['20'].sum() / SCALE
+insured_total = bank1_total + bank2_total + bank3_20_total
+
+# ---------- Write to Excel at exact cell addresses ----------
+from openpyxl import load_workbook
+from openpyxl.workbook import Workbook
+
+# try to open workbook; if not exists, create
+try:
+    wb = load_workbook(EXCEL_PATH)
+except Exception:
+    wb = Workbook()
+    # ensure default sheet does not collide
+    if wb.sheetnames:
+        del wb[wb.sheetnames[0]]
+
+# drop/replace our sheet
+if SHEET_NAME in wb.sheetnames:
+    del wb[SHEET_NAME]
+ws = wb.create_sheet(SHEET_NAME)
+
+# Titles (text only; contents-accurate, no formatting)
+ws["A1"] = "INTERNAL USE ONLY"
+ws["A2"] = "For Estimated Sizing Purposes Only"
+ws["A4"] = "US Wealth Management"
+ws["A5"] = "Cash Sweep - Max Affiliate Allocation"
+
+# Column headers for the top grid (placed to mirror your screenshot)
+ws.cell(row=TOP_HEADER_ROW, column=2, value="Account Category")  # B
+ws.cell(row=TOP_HEADER_ROW, column=3, value="Insurance Limit")   # C
+ws.cell(row=TOP_HEADER_ROW, column=4, value="Coverage Limit")    # D
+# leave col E blank intentionally
+ws.cell(row=TOP_HEADER_ROW, column=6, value="CNB")               # F
+# leave col G blank
+ws.cell(row=TOP_HEADER_ROW, column=8, value="RBC Bank")          # H
+# leave col I blank
+ws.cell(row=TOP_HEADER_ROW, column=10, value="3rd Party Banks")  # J
+ws.cell(row=TOP_HEADER_ROW, column=11, value="Total")            # K
+
+# Fill category rows
+r = TOP_DATA_START
+for cat in ACCOUNT_ORDER:
+    ws.cell(row=r, column=2, value=cat)                                # B: Account Category
+    ws.cell(row=r, column=3, value=float(grp.loc[cat, "Insurance Limit"]))  # C
+    ws.cell(row=r, column=4, value=float(grp.loc[cat, "Coverage Limit"]))   # D
+    ws.cell(row=r, column=6, value=float(round(grp_scaled.loc[cat, "CNB"], ROUND_DECIMALS)))        # F
+    ws.cell(row=r, column=8, value=float(round(grp_scaled.loc[cat, "RBC Bank"], ROUND_DECIMALS)))   # H
+    ws.cell(row=r, column=10, value=float(round(grp_scaled.loc[cat, "3rd Party Banks"], ROUND_DECIMALS)))  # J
+    ws.cell(row=r, column=11, value=float(round(grp_scaled.loc[cat, "Total"], ROUND_DECIMALS)))     # K
+    r += 1
+
+# Top totals row (navy bar in Excel)
+top_total_row = r + 1
+ws.cell(row=top_total_row, column=2, value=f"Sweep Balances as of {AS_OF_LABEL}")  # B
+ws.cell(row=top_total_row, column=6, value=float(round(top_totals["CNB"], ROUND_DECIMALS)))   # F
+ws.cell(row=top_total_row, column=8, value=float(round(top_totals["RBC Bank"], ROUND_DECIMALS)))  # H
+ws.cell(row=top_total_row, column=10, value=float(round(top_totals["3rd Party"], ROUND_DECIMALS))) # J
+ws.cell(row=top_total_row, column=11, value=float(round(top_totals["Total"], ROUND_DECIMALS)))     # K
+
+# Middle section (Uninsured / Insured)
+r = MID_START_ROW
+ws.cell(row=r,   column=2, value="Uninsured")                            # B
+ws.cell(row=r,   column=6, value=float(round(mid_rows["Uninsured"]["CNB"], ROUND_DECIMALS)))   # F
+ws.cell(row=r,   column=8, value=float(round(mid_rows["Uninsured"]["RBC Bank"], ROUND_DECIMALS))) # H
+ws.cell(row=r,   column=10, value=float(round(mid_rows["Uninsured"]["3rd Party"], ROUND_DECIMALS)))# J
+ws.cell(row=r,   column=11, value=float(round(mid_rows["Uninsured"]["Total"], ROUND_DECIMALS)))    # K
+
+r += 1
+ws.cell(row=r,   column=2, value="Insured")                              # B
+ws.cell(row=r,   column=6, value=float(round(mid_rows["Insured"]["CNB"], ROUND_DECIMALS)))     # F
+ws.cell(row=r,   column=8, value=float(round(mid_rows["Insured"]["RBC Bank"], ROUND_DECIMALS)))   # H
+ws.cell(row=r,   column=10, value=float(round(mid_rows["Insured"]["3rd Party"], ROUND_DECIMALS))) # J
+ws.cell(row=r,   column=11, value=float(round(mid_rows["Insured"]["Total"], ROUND_DECIMALS)))     # K
+
+# Middle totals row (another navy bar)
+r += 2
+ws.cell(row=r, column=2, value=f"Sweep Balances as of {AS_OF_LABEL}")  # B
+ws.cell(row=r, column=6, value=float(round(tot_cnb, ROUND_DECIMALS)))  # F
+ws.cell(row=r, column=8, value=float(round(tot_rbc, ROUND_DECIMALS)))  # H
+ws.cell(row=r, column=10, value=float(round(tot_third, ROUND_DECIMALS))) # J
+ws.cell(row=r, column=11, value=float(round(tot_cnb + tot_rbc + tot_third, ROUND_DECIMALS))) # K
+
+# Bottom section headers and row ("Assume no bank balance restrictions")
+r = BOT_START_ROW
+ws.cell(row=r-1, column=6,  value="Bank 1")              # F
+ws.cell(row=r-1, column=8,  value="Bank 2")              # H
+ws.cell(row=r-1, column=10, value="Banks 3 to 20")       # J
+ws.cell(row=r-1, column=11, value="Total")               # K
+
+ws.cell(row=r, column=2, value="Assume no bank balance restrictions")
+ws.cell(row=r, column=6, value=float(round(bank1_total, ROUND_DECIMALS)))       # F
+ws.cell(row=r, column=8, value=float(round(bank2_total, ROUND_DECIMALS)))       # H
+ws.cell(row=r, column=10, value=float(round(bank3_20_total, ROUND_DECIMALS)))   # J
+ws.cell(row=r, column=11, value=float(round(insured_total, ROUND_DECIMALS)))    # K
+
+# Save workbook
+wb.save(EXCEL_PATH)
+print(f"Exact-cell summary written to: {EXCEL_PATH}  (sheet: {SHEET_NAME})")
+
+# ---------- Also print a "grid" to the console (VS Code) ----------
+# Build a minimal rectangular grid that shows the same positions (B..K)
+COLS = list("ABCDEFGHIJK")
+NROWS = BOT_START_ROW + 2
+grid = [[""] * len(COLS) for _ in range(NROWS+1)]
+
+def put(cell, val):
+    # cell like "B8"
+    col_letter = ''.join([c for c in cell if c.isalpha()])
+    row_num = int(''.join([c for c in cell if c.isdigit()]))
+    col_idx = COLS.index(col_letter)
+    while len(grid) <= row_num:
+        grid.append([""] * len(COLS))
+    grid[row_num][col_idx] = val
+
+# Headers and values (mirror what we wrote to Excel)
+put("B1", "INTERNAL USE ONLY"); put("B2", "For Estimated Sizing Purposes Only")
+put("B4", "US Wealth Management"); put("B5", "Cash Sweep - Max Affiliate Allocation")
+
+put(f"B{TOP_HEADER_ROW}", "Account Category")
+put(f"C{TOP_HEADER_ROW}", "Insurance Limit")
+put(f"D{TOP_HEADER_ROW}", "Coverage Limit")
+put(f"F{TOP_HEADER_ROW}", "CNB")
+put(f"H{TOP_HEADER_ROW}", "RBC Bank")
+put(f"J{TOP_HEADER_ROW}", "3rd Party Banks")
+put(f"K{TOP_HEADER_ROW}", "Total")
+
+r = TOP_DATA_START
+for cat in ACCOUNT_ORDER:
+    put(f"B{r}", cat)
+    put(f"C{r}", float(grp.loc[cat, "Insurance Limit"]))
+    put(f"D{r}", float(grp.loc[cat, "Coverage Limit"]))
+    put(f"F{r}", float(round(grp_scaled.loc[cat, "CNB"], ROUND_DECIMALS)))
+    put(f"H{r}", float(round(grp_scaled.loc[cat, "RBC Bank"], ROUND_DECIMALS)))
+    put(f"J{r}", float(round(grp_scaled.loc[cat, "3rd Party Banks"], ROUND_DECIMALS)))
+    put(f"K{r}", float(round(grp_scaled.loc[cat, "Total"], ROUND_DECIMALS)))
+    r += 1
+
+trow = r + 1
+put(f"B{trow}", f"Sweep Balances as of {AS_OF_LABEL}")
+put(f"F{trow}", float(round(top_totals["CNB"], ROUND_DECIMALS)))
+put(f"H{trow}", float(round(top_totals["RBC Bank"], ROUND_DECIMALS)))
+put(f"J{trow}", float(round(top_totals["3rd Party"], ROUND_DECIMALS)))
+put(f"K{trow}", float(round(top_totals["Total"], ROUND_DECIMALS)))
+
+r = MID_START_ROW
+put(f"B{r}", "Uninsured")
+put(f"F{r}", float(round(mid_rows["Uninsured"]["CNB"], ROUND_DECIMALS)))
+put(f"H{r}", float(round(mid_rows["Uninsured"]["RBC Bank"], ROUND_DECIMALS)))
+put(f"J{r}", float(round(mid_rows["Uninsured"]["3rd Party"], ROUND_DECIMALS)))
+put(f"K{r}", float(round(mid_rows["Uninsured"]["Total"], ROUND_DECIMALS)))
+r += 1
+put(f"B{r}", "Insured")
+put(f"F{r}", float(round(mid_rows["Insured"]["CNB"], ROUND_DECIMALS)))
+put(f"H{r}", float(round(mid_rows["Insured"]["RBC Bank"], ROUND_DECIMALS)))
+put(f"J{r}", float(round(mid_rows["Insured"]["3rd Party"], ROUND_DECIMALS)))
+put(f"K{r}", float(round(mid_rows["Insured"]["Total"], ROUND_DECIMALS)))
+
+r += 2
+put(f"B{r}", f"Sweep Balances as of {AS_OF_LABEL}")
+put(f"F{r}", float(round(tot_cnb, ROUND_DECIMALS)))
+put(f"H{r}", float(round(tot_rbc, ROUND_DECIMALS)))
+put(f"J{r}", float(round(tot_third, ROUND_DECIMALS)))
+put(f"K{r}", float(round(tot_cnb + tot_rbc + tot_third, ROUND_DECIMALS)))
+
+hdr_row = BOT_START_ROW - 1
+put(f"F{hdr_row}", "Bank 1"); put(f"H{hdr_row}", "Bank 2"); put(f"J{hdr_row}", "Banks 3 to 20"); put(f"K{hdr_row}", "Total")
+put(f"B{BOT_START_ROW}", "Assume no bank balance restrictions")
+put(f"F{BOT_START_ROW}", float(round(bank1_total, ROUND_DECIMALS)))
+put(f"H{BOT_START_ROW}", float(round(bank2_total, ROUND_DECIMALS)))
+put(f"J{BOT_START_ROW}", float(round(bank3_20_total, ROUND_DECIMALS)))
+put(f"K{BOT_START_ROW}", float(round(insured_total, ROUND_DECIMALS)))
+
+grid_df = pd.DataFrame(grid[1:], columns=COLS)  # drop row 0; start at row 1
+# Hide empty columns except B..K when printing:
+print("\n--- Exact-cell view (text grid; columns B..K) ---")
+print(grid_df.loc[:, ["B","C","D","E","F","G","H","I","J","K"]].replace("", np.nan))
