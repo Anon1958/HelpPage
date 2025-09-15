@@ -62,3 +62,174 @@ Business continuity & ownership. Stabilized reporting during turnover; created r
 Growth mindset. While continuing to deepen RBC-specific knowledge, I bring strong SQL/Python/Excel skills, attention to detail, and a can-do approach focused on the best, most efficient solution.
 
 Collectively, these efforts increased speed, reliability, and stakeholder trust. Based on the scope and impact outlined, I believe this year’s performance meets the bar for Exceeded and I welcome calibration.
+
+
+
+
+# --- Add these imports near your other imports ---
+import os
+import re
+import numpy as np
+import pandas as pd
+
+# -------------------------------------------------
+# CONFIG -- update only if you want to read/write Excel here
+# If df2 already exists in memory from your SQL step, this path is only
+# used for writing the enriched sheet; reading is skipped by default.
+excel_path = r"Z:\FinData\Common\FP&A\Product\Cash Programs\Data\Waterfall\9.15.25\waterfallupdate.xlsx"
+read_df_from_excel_if_missing = True     # set False to avoid any Excel I/O
+input_sheet_name = "sql query"            # change if your SQL export sheet has a different name
+calc_sheet_name = "calc"                  # new sheet with enriched columns
+summary_sheet_name = "summary_from_py"    # new sheet with Python summary
+# -------------------------------------------------
+
+def _norm(s: str) -> str:
+    """Normalize a column name for fuzzy matching."""
+    return re.sub(r'[^a-z0-9]+', '', str(s).lower())
+
+def find_col(df: pd.DataFrame, *aliases: str) -> str:
+    """
+    Find a column in df that matches any of the aliases (case/space/punct insensitive).
+    Raises KeyError if none found.
+    """
+    norm_cols = { _norm(c): c for c in df.columns }
+    for a in aliases:
+        key = _norm(a)
+        if key in norm_cols:
+            return norm_cols[key]
+    raise KeyError(f"None of {aliases} found in dataframe columns: {list(df.columns)}")
+
+def add_wxynz_columns(df: pd.DataFrame,
+                      thresholds=(1, 2, 20),
+                      clamp_nonneg: bool = True) -> pd.DataFrame:
+    """
+    Reproduce Excel logic for columns:
+      W: '1' (Bank 1)
+      X: '2' (Bank 2)
+      Y: '20' (Banks 3..20 with special 'Retirement' handling)
+      Z: 'Uninsured (21)'
+
+    Returns a copy of df with new columns: ['1','2','20','Uninsured_21'].
+    If '# Banks Covered' is missing, computes it as Sweep_Balance / Insurance Limit.
+    """
+    # Resolve columns (accept several spellings)
+    acct_col  = find_col(df, 'FDIC Account Category', 'Fdic Account Category', 'Account Category')
+    ins_col   = find_col(df, 'Insurance Limit', 'Insurance_Limit')
+    over_col  = find_col(df, 'Overage Limit', 'Coverage Limit', 'Coverage_Limit', 'Overage_Limit')
+    sweep_col = find_col(df, 'Sweep_Balance', 'Sweep Balance')
+    # Optional: existing Banks Covered
+    try:
+        banks_col = find_col(df, '# Banks Covered', 'Banks Covered')
+    except KeyError:
+        banks_col = None
+
+    # Pull and coerce data
+    acct  = df[acct_col].astype(str).fillna('')
+    ins   = pd.to_numeric(df[ins_col], errors='coerce').fillna(0).to_numpy()
+    over  = pd.to_numeric(df[over_col], errors='coerce').fillna(0).to_numpy()
+    bal   = pd.to_numeric(df[sweep_col], errors='coerce').fillna(0).to_numpy()
+
+    if banks_col is None:
+        # Your V-column appears to be a ratio, not CEILING -- we mirror that.
+        banks = np.divide(bal, ins, out=np.zeros_like(bal, dtype=float), where=ins!=0)
+        banks_from = 'computed'
+    else:
+        banks = pd.to_numeric(df[banks_col], errors='coerce').fillna(0).to_numpy()
+        banks_from = f"existing column: {banks_col}"
+
+    thr1, thr2, thr20 = thresholds
+
+    # ----- W (Bank 1): IF(V>1, E, I)
+    W = np.where(banks > thr1, ins, bal)
+
+    # ----- X (Bank 2): IF(V>2, E, I - W)
+    X = np.where(banks > thr2, ins, bal - W)
+
+    # ----- Y (Banks 3..20), with Retirement special-case
+    is_ret = np.char.lower(acct.to_numpy(dtype=str)).astype(object) == 'retirement'
+    Y_nonret = np.where(
+        banks <= thr2, 0,
+        np.where(banks <= thr20, bal - W - X, over - W - X)
+    )
+    Y = np.where(is_ret, 0, Y_nonret)
+
+    # ----- Z (Bank 21 / Uninsured)
+    Z_ret    = bal - W - X - Y
+    Z_nonret = np.where(banks > thr20, bal - W - X - Y, 0)
+    Z = np.where(is_ret, Z_ret, Z_nonret)
+
+    if clamp_nonneg:
+        # Excel formulas could technically allow negatives; in practice these should be 0+
+        W = np.maximum(W, 0)
+        X = np.maximum(X, 0)
+        Y = np.maximum(Y, 0)
+        Z = np.maximum(Z, 0)
+
+    out = df.copy()
+    out['1']             = W
+    out['2']             = X
+    out['20']            = Y
+    out['Uninsured_21']  = Z
+    if banks_col is None:
+        out['# Banks Covered (computed)'] = banks
+
+    # Keep a note you can print if you like:
+    out.attrs['banks_source'] = banks_from
+    return out
+
+def build_summary(df_enriched: pd.DataFrame) -> pd.DataFrame:
+    """
+    Produces the bottom-of-sheet totals you showed:
+      Bank 1 (W), Bank 2 (X), Banks 3–20 (Y), Uninsured (Z),
+      Insured Total, Grand Total.
+    """
+    w_sum = float(df_enriched['1'].sum())
+    x_sum = float(df_enriched['2'].sum())
+    y_sum = float(df_enriched['20'].sum())
+    z_sum = float(df_enriched['Uninsured_21'].sum())
+    insured_total = w_sum + x_sum + y_sum
+    grand_total   = insured_total + z_sum
+
+    return pd.DataFrame([{
+        'Bank 1 (1)': w_sum,
+        'Bank 2 (2)': x_sum,
+        'Banks 3–20 (20)': y_sum,
+        'Uninsured (21)': z_sum,
+        'Insured Total': insured_total,
+        'Grand Total': grand_total
+    }])
+
+# -------------------------------------------------
+# ENTRY POINT
+# Use df2 from your SQL step if it exists; otherwise read the Excel file.
+try:
+    df2  # will NameError if absent
+except NameError:
+    if read_df_from_excel_if_missing:
+        df2 = pd.read_excel(excel_path, sheet_name=input_sheet_name)
+    else:
+        raise RuntimeError("df2 is not defined. Run the SQL step first or enable reading from Excel.")
+
+df_enriched = add_wxynz_columns(df2)
+
+summary_df = build_summary(df_enriched)
+
+# ---- Print summary in VS Code terminal (both raw and in billions)
+pd.set_option('display.float_format', lambda v: f"{v:,.2f}")
+print(f"\n# Banks Covered source -> {df_enriched.attrs.get('banks_source')}")
+print("\n--- Summary (native units) ---")
+print(summary_df.to_string(index=False))
+
+print("\n--- Summary (billions) ---")
+print((summary_df / 1e9).to_string(index=False))
+
+# ---- OPTIONAL: write enriched table + summary back to the same workbook
+try:
+    with pd.ExcelWriter(excel_path, mode='a', engine='openpyxl', if_sheet_exists='replace') as writer:
+        df_enriched.to_excel(writer, sheet_name=calc_sheet_name, index=False)
+        summary_df.to_excel(writer, sheet_name=summary_sheet_name, index=False)
+    print(f"\nWrote enriched table to sheet '{calc_sheet_name}' and summary to '{summary_sheet_name}' in:")
+    print(f"  {excel_path}")
+except Exception as e:
+    # Non-fatal; you still get printed summary in VS Code
+    print(f"\nNOTE: Could not write to Excel ({e}). The summary above is still valid.")
