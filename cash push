@@ -547,3 +547,19 @@ grid_df = pd.DataFrame(grid[1:], columns=COLS)  # drop row 0; start at row 1
 # Hide empty columns except B..K when printing:
 print("\n--- Exact-cell view (text grid; columns B..K) ---")
 print(grid_df.loc[:, ["B","C","D","E","F","G","H","I","J","K"]].replace("", np.nan))
+
+
+
+Hi [Boss],
+We’ve isolated the UHNW households that had MaxLTMReported ≥ $20MM but ended the period with Current AUA < $10MM (tab: "20M_Max but <10M"). Their total NNA is the outflow that dropped them below the floor--this is exactly the piece that the new definition excludes from UHNW NNA, which overstates 20MM+ performance.
+
+I propose we keep the official UHNW 20MM+ view as End‑of‑Period (in‑scope) for counts/AUA/NNA, and add a boxed disclosure:
+	•	UHNW 20MM+ NNA (EOP in‑scope): $X
+	•	Reclassification – Ex‑UHNW outflows (LTM ≥ $20MM, Current < $10MM): $Y (from the "20M_Max but <10M" tab)
+	•	(Optional) Reclassification – Entrants’ NNA: $Z
+	•	UHNW 20MM+ Economic NNA (start‑segment) = $X + $Y – $Z
+
+This shows the true economics without penalizing lower brackets and keeps our official segment totals consistent with the new definition. If you’d like, we can add a simple migration table (Entrants/Exits counts and end AUA) beneath the KPIs.
+
+Thanks,
+[Your Name]
