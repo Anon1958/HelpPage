@@ -61,3 +61,89 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    
+    
+    
+    
+    import os
+import time
+import subprocess
+from pathlib import Path
+import platform
+
+# ====== CONFIG ======
+WEBEX_TARGET = r"C:\Users\iams395\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Webex\Webex.lnk"
+OPEN_SECONDS = 2     # "pretty much instantly" (minimum 1 sec so the process spawns)
+GAP_SECONDS  = 2     # short pause before reopening
+KEEP_AWAKE   = True  # keep display/system from sleeping while running
+# ====================
+
+# Common Webex processes to terminate
+PROCESS_NAMES = [
+    "Webex.exe", "WebexPT.exe", "webexmta.exe",
+    "webexhost.exe", "CiscoCollabHost.exe",
+    "wbxsvc.exe", "ptoneclk.exe", "atmgr.exe"
+]
+
+def set_keep_awake(enable: bool):
+    """Prevent display/system sleep while this Python process runs (Windows only)."""
+    if platform.system() != "Windows":
+        return
+    import ctypes
+    ES_CONTINUOUS       = 0x80000000
+    ES_SYSTEM_REQUIRED  = 0x00000001
+    ES_DISPLAY_REQUIRED = 0x00000002
+    flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED if enable else ES_CONTINUOUS
+    ctypes.windll.kernel32.SetThreadExecutionState(flags)
+    print(f"[+] Keep-awake {'ENABLED' if enable else 'DISABLED'}")
+
+def launch_webex():
+    path = Path(WEBEX_TARGET)
+    if not path.exists():
+        raise FileNotFoundError(f"Cannot find Webex shortcut/exe at: {path}")
+    os.startfile(str(path))  # works with .lnk or .exe
+    print("[+] Opened Webex")
+
+def kill_webex():
+    cf = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    for name in PROCESS_NAMES:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/IM", name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=cf
+        )
+    print("[+] Closed Webex")
+
+def main():
+    open_s = max(1, int(OPEN_SECONDS))
+    gap_s  = max(1, int(GAP_SECONDS))
+    print(f"Pulse mode: open ~{open_s}s, gap ~{gap_s}s. Press Ctrl+C to stop.")
+
+    try:
+        if KEEP_AWAKE:
+            set_keep_awake(True)
+
+        while True:
+            launch_webex()
+            time.sleep(open_s)
+            kill_webex()
+            time.sleep(gap_s)
+
+    except KeyboardInterrupt:
+        print("\n[!] Stopping…")
+    finally:
+        # restore normal sleep behavior and make sure Webex isn't left running
+        try:
+            if KEEP_AWAKE:
+                set_keep_awake(False)
+        finally:
+            try:
+                kill_webex()
+            except Exception:
+                pass
+        print("[+] Done. Sleep restored.")
+
+if __name__ == "__main__":
+    main()
