@@ -1,0 +1,63 @@
+import os
+import time
+import subprocess
+from pathlib import Path
+
+# --- CONFIG ----------------------------------------------------
+# Point this at your shortcut (.lnk) or the actual EXE.
+# From your screenshot it looks like the shortcut lives here:
+WEBEX_SHORTCUT = r"C:\Users\iams395\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Webex\Webex.lnk"
+
+# How long to keep Webex open each cycle (minutes)
+OPEN_MINUTES = 5
+
+# Optional: wait time after closing before opening again (minutes)
+GAP_MINUTES = 0
+# ---------------------------------------------------------------
+
+# Common Webex process names to kill; adjust if your Task Manager shows different names
+PROCESS_NAMES = [
+    "Webex.exe",
+    "WebexPT.exe",
+    "webexmta.exe",
+    "webexhost.exe",
+    "atmgr.exe"  # sometimes part of Webex stack
+]
+
+def launch_webex():
+    path = Path(WEBEX_SHORTCUT)
+    if not path.exists():
+        raise FileNotFoundError(f"Cannot find Webex at: {path}")
+    # start the .lnk or .exe
+    os.startfile(str(path))  # uses ShellExecute; works with .lnk
+    print(f"[+] Launched Webex via {path}")
+
+def kill_webex():
+    # Quietly attempt to kill all known Webex processes
+    for name in PROCESS_NAMES:
+        subprocess.run(
+            ["taskkill", "/IM", name, "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+    print("[+] Closed Webex (taskkill issued)")
+
+def main():
+    open_secs = int(OPEN_MINUTES * 60)
+    gap_secs  = int(GAP_MINUTES * 60)
+
+    print(f"Starting Webex pulser: open {OPEN_MINUTES} min, gap {GAP_MINUTES} min. Ctrl+C to stop.")
+    try:
+        while True:
+            launch_webex()
+            time.sleep(open_secs)
+            kill_webex()
+            if gap_secs:
+                time.sleep(gap_secs)
+    except KeyboardInterrupt:
+        print("\n[!] Stopping on user request…")
+        kill_webex()
+
+if __name__ == "__main__":
+    main()
