@@ -1,0 +1,30 @@
+-- 🔍 View SQL Definitions (Trace Source Logic)
+EXEC sp_helptext 'ZZROProd.SSE.v_M_BAMHouseholdCurrent';
+GO
+EXEC sp_helptext 'ZZROProd.SSE.v_M_AcctHistory';
+GO
+EXEC sp_helptext 'ZZROProd.SSE.v_M_NNAAcctHST';
+GO
+
+-- 🧭 Map Columns from Views (Trace Field Lineage)
+SELECT 
+    v.name AS ViewName,
+    c.name AS ColumnName,
+    c.column_id
+FROM sys.views v
+JOIN sys.columns c ON v.object_id = c.object_id
+WHERE v.name IN (
+    'v_M_BAMHouseholdCurrent', 
+    'v_M_AcctHistory', 
+    'v_M_NNAAcctHST'
+);
+GO
+
+-- 🗂️ Example: Add Field Description to BAM View
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description', 
+    @value = N'Comes from monthly UHNW ETL process pre-merge',
+    @level0type = N'SCHEMA', @level0name = 'SSE',
+    @level1type = N'VIEW',  @level1name = 'v_M_BAMHouseholdCurrent',
+    @level2type = N'COLUMN', @level2name = 'HouseholdID';
+GO
