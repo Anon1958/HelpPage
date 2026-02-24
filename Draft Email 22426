@@ -1,0 +1,68 @@
+Subject: Recurring Tab Updates + Showing "Date Last Saved" in File Explorer (No Need for Dates in File Names)
+
+Hi [Boss],
+
+Two things for you:
+
+1. RECURRING TAB UPDATES
+2. "DATE LAST SAVED" — HOW TO SEE IT IN FILE EXPLORER (BETTER THAN DATES IN FILE NAMES)
+
+────────────────────────────────────
+1. RECURRING TAB UPDATES
+────────────────────────────────────
+
+I rebuilt the Recurring tab in the Project Tracking workbook with some major improvements:
+
+• Rolling 6-month columns (current month + 5 forward) — automatically stays current
+• Per-deliverable tracking: GV Day, Preparer, Reviewed By, and Distributed Date for each month
+• Color-coded status at a glance:
+    - RED    = Overdue (not distributed and past due date)
+    - YELLOW = Due within 3 days
+    - GREEN  = Distributed (fill in the date and it turns green automatically)
+• Freeze panes so the deliverable names stay visible while scrolling through months
+• Auto-filter on headers for quick sorting/filtering
+• Clean RBC navy/blue theme throughout
+
+To use it:
+- Just fill in the "Distributed Date" cell when a report goes out → it turns GREEN automatically
+- "Preparer" defaults to the Owner — update as needed
+- "Reviewed By" is blank — fill in as appropriate
+- Due dates are calculated from the GV Day field
+
+The script that generates this is saved in our shared repo if we ever need to rebuild or modify it.
+
+────────────────────────────────────
+2. SHOWING "DATE LAST SAVED" IN FILE EXPLORER
+────────────────────────────────────
+
+Rather than putting dates in file names (e.g., "Report_02-24-2026.xlsx"), Windows has a built-in way to see when any file was last saved — right in the folder view. This is actually better because:
+
+• File names stay clean and consistent
+• The date updates AUTOMATICALLY every time the file is saved (no manual renaming)
+• You can sort and filter by date with one click
+• No risk of someone forgetting to update the date in the file name
+
+Here's how to set it up (takes about 30 seconds):
+
+STEP 1: Open File Explorer and navigate to the folder
+STEP 2: Make sure you're in "Details" view
+         → Click View (in the toolbar/ribbon) → Details
+STEP 3: Right-click any column header (e.g., "Name" or "Date modified")
+STEP 4: Click "More..." at the bottom of the dropdown
+STEP 5: In the "Choose Details" window, scroll down and check ☑ "Date last saved"
+         (You can also add "Date created" or "Last printed" if useful)
+STEP 6: Click OK
+
+You'll now see a "Date last saved" column showing the exact date/time each file was last saved — no manual effort required.
+
+TO APPLY THIS VIEW TO ALL FOLDERS (so you only do this once):
+→ File → Options → View tab → Click "Apply to Folders" → OK
+
+This pulls the "Date last saved" directly from the file's metadata (the same info you see when you right-click a file → Properties → Details tab). It's the most reliable way to track when files were last touched.
+
+BONUS: You can click the "Date last saved" column header to sort files by most recently saved — makes it very easy to find what was worked on today.
+
+Let me know if you have any questions or want me to walk through it with you.
+
+Best,
+David
