@@ -62,7 +62,19 @@ This pulls the "Date last saved" directly from the file's metadata (the same inf
 
 BONUS: You can click the "Date last saved" column header to sort files by most recently saved — makes it very easy to find what was worked on today.
 
-Let me know if you have any questions or want me to walk through it with you.
+────────────────────────────────────
+3. QUICK TIP: PIN THE WORKBOOK TO YOUR TASKBAR
+────────────────────────────────────
+
+To save yourself time navigating to the Project Tracking workbook every day:
+
+STEP 1: Open the workbook in Excel
+STEP 2: Right-click the Excel icon in your taskbar
+STEP 3: You'll see the file under "Recent" — hover over it and click the 📌 pin icon
+
+Now the workbook will always be at the top of your Excel jump list — just right-click the Excel icon and it's right there. No more digging through folders.
+
+Let me know if you have any questions or want me to walk through any of this with you.
 
 Best,
 David
