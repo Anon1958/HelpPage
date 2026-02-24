@@ -1,0 +1,405 @@
+"""
+rebuild_recurring.py
+
+Reads the existing "Recurring" tab from your Project Tracking workbook,
+then rebuilds it with a clean, professional RBC navy/blue theme including:
+
+  - Rolling 6-month columns (current month + 5 forward)
+  - Per-deliverable: GV Day, Preparer, Reviewed By, Distributed Date
+  - Conditional formatting: RED = overdue, YELLOW = due soon, GREEN = complete
+  - Status dashboard header row
+
+Usage:
+    pip install openpyxl
+    python rebuild_recurring.py
+
+Edit FILE_PATH below to match your actual file location.
+"""
+
+import re
+from datetime import date, timedelta
+
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.utils import get_column_letter
+
+# ── CONFIG ──────────────────────────────────────────────────────────────────
+FILE_PATH = r"C:\Users\iams395\Copy of Project Tracking.xlsx"
+TAB_NAME = "Recurring"
+
+# ── RBC COLOR PALETTE ────────────────────────────────────────────────────────
+RBC_NAVY = "001F5B"
+RBC_BLUE = "0051A5"
+RBC_LIGHT_BLUE = "C8D9F0"
+RBC_MID_BLUE = "5B9BD5"
+RBC_WHITE = "FFFFFF"
+STATUS_RED = "FF4444"
+STATUS_YELLOW = "FFD966"
+STATUS_GREEN = "70AD47"
+STATUS_GREY = "D9D9D9"
+FONT_MAIN = "Arial"
+
+
+# ── HELPERS ──────────────────────────────────────────────────────────────────
+def solid(hex_color):
+    return PatternFill("solid", fgColor=hex_color)
+
+
+def thin_border(style="thin", color="BFBFBF"):
+    s = Side(style=style, color=color)
+    return Border(left=s, right=s, top=s, bottom=s)
+
+
+def header_font(size=10, bold=True, color=RBC_WHITE):
+    return Font(name=FONT_MAIN, size=size, bold=bold, color=color)
+
+
+def cell_font(size=9, bold=False, color="1F1F1F"):
+    return Font(name=FONT_MAIN, size=size, bold=bold, color=color)
+
+
+def center():
+    return Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+
+def left():
+    return Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+
+def rolling_months(n=6):
+    today = date.today()
+    months = []
+    y, m = today.year, today.month
+    for _ in range(n):
+        months.append(date(y, m, 1))
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return months
+
+
+def gv_day_to_number(gv_str):
+    if not gv_str:
+        return None
+    s = str(gv_str).strip()
+    m = re.match(r"GV\s*(\d+)", s, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    m = re.match(r"(\d+)", s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def nth_business_day(year, month, n):
+    if n is None:
+        return None
+    d = date(year, month, 1)
+    count = 0
+    while True:
+        if d.weekday() < 5:
+            count += 1
+            if count == n:
+                return d
+        d += timedelta(days=1)
+        if d.month != month:
+            return None
+
+
+# ── READ EXISTING DATA ───────────────────────────────────────────────────────
+print("Loading workbook…")
+wb = load_workbook(FILE_PATH)
+if TAB_NAME not in wb.sheetnames:
+    raise ValueError(f"Sheet '{TAB_NAME}' not found. Available: {wb.sheetnames}")
+
+src = wb[TAB_NAME]
+
+# Pull raw rows — find header row by looking for "Name" in column B, then read data rows
+deliverables = []
+header_found = False
+for row in src.iter_rows(min_row=1, values_only=False):
+    # Use .value to read cell values; row is tuple of Cell objects
+    vals = [c.value for c in row]
+    # Detect header row: column B (index 1) contains "Name"
+    if not header_found:
+        if vals[1] and str(vals[1]).strip().lower() == "name":
+            header_found = True
+        continue
+
+    # After header: read data rows
+    name_val = vals[1]
+    if not name_val or not str(name_val).strip():
+        continue
+    name = str(name_val).strip()
+    if name.lower() == "name":
+        continue
+
+    freq = str(vals[3]).strip() if vals[3] else ""
+    timing = str(vals[4]).strip() if vals[4] else ""
+    owner = str(vals[5]).strip() if vals[5] else ""
+    # GV Day in column L (index 11) — guard against short rows
+    gv_raw = str(vals[11]).strip() if len(vals) > 11 and vals[11] else ""
+
+    deliverables.append({
+        "name": name,
+        "frequency": freq,
+        "timing": timing,
+        "owner": owner,
+        "gv_raw": gv_raw,
+        "preparer": owner,
+        "reviewed_by": "",
+        "distributed_date": "",
+    })
+
+print(f"Found {len(deliverables)} deliverables.")
+if not deliverables:
+    raise ValueError(
+        "No deliverables found — check that the source sheet has a header row "
+        "with 'Name' in column B and data rows below it."
+    )
+
+
+# ── DELETE OLD SHEET, CREATE FRESH ───────────────────────────────────────────
+del wb[TAB_NAME]
+ws = wb.create_sheet(TAB_NAME)
+
+# Reorder so Recurring comes before Done if it exists
+if "Done" in wb.sheetnames:
+    sheet_order = wb.sheetnames
+    current_idx = sheet_order.index(TAB_NAME)
+    target_idx = sheet_order.index("Done")
+    offset = target_idx - current_idx
+    if offset > 0:
+        wb.move_sheet(TAB_NAME, offset=offset - 1)
+
+
+# ── COLUMN LAYOUT ────────────────────────────────────────────────────────────
+STATIC_COLS = ["Name", "Frequency", "Timing", "Owner", "GV Day"]
+COL_WIDTHS = [35, 18, 10, 14, 10]
+MONTH_COL_LABELS = ["Preparer", "Reviewed By", "Distributed Date", "Due Date"]
+MONTH_COL_WIDTHS = [14, 14, 16, 12]
+
+months = rolling_months(6)
+STATIC_COUNT = len(STATIC_COLS)
+MONTH_COLS = len(MONTH_COL_LABELS)
+TOTAL_COLS = STATIC_COUNT + MONTH_COLS * len(months)
+
+
+# ── ROW 1: TITLE BANNER ─────────────────────────────────────────────────────
+ws.row_dimensions[1].height = 28
+ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=TOTAL_COLS)
+title_cell = ws.cell(row=1, column=1, value="RECURRING DELIVERABLES TRACKER")
+title_cell.font = Font(name=FONT_MAIN, size=14, bold=True, color=RBC_WHITE)
+title_cell.fill = solid(RBC_NAVY)
+title_cell.alignment = center()
+
+
+# ── ROW 2: MONTH SPAN HEADERS ───────────────────────────────────────────────
+ws.row_dimensions[2].height = 20
+ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=STATIC_COUNT)
+hdr = ws.cell(row=2, column=1, value="")
+hdr.fill = solid(RBC_NAVY)
+
+# Fill all static-area cells in row 2 so merged region has consistent fill
+for ci in range(2, STATIC_COUNT + 1):
+    ws.cell(row=2, column=ci).fill = solid(RBC_NAVY)
+
+for i, m in enumerate(months):
+    start_col = STATIC_COUNT + 1 + i * MONTH_COLS
+    end_col = start_col + MONTH_COLS - 1
+    ws.merge_cells(start_row=2, start_column=start_col, end_row=2, end_column=end_col)
+    mc = ws.cell(row=2, column=start_col, value=m.strftime("%b-%y").upper())
+    mc.font = header_font(size=10, bold=True, color=RBC_WHITE)
+    mc.fill = solid(RBC_BLUE if i % 2 == 0 else RBC_NAVY)
+    mc.alignment = center()
+    mc.border = thin_border("medium", RBC_WHITE)
+
+
+# ── ROW 3: COLUMN HEADERS ───────────────────────────────────────────────────
+ws.row_dimensions[3].height = 36
+for ci, label in enumerate(STATIC_COLS, start=1):
+    c = ws.cell(row=3, column=ci, value=label)
+    c.font = header_font(size=9)
+    c.fill = solid(RBC_NAVY)
+    c.alignment = center()
+    c.border = thin_border("thin", RBC_WHITE)
+    ws.column_dimensions[get_column_letter(ci)].width = COL_WIDTHS[ci - 1]
+
+for i in range(len(months)):
+    for j, label in enumerate(MONTH_COL_LABELS):
+        col = STATIC_COUNT + 1 + i * MONTH_COLS + j
+        c = ws.cell(row=3, column=col, value=label)
+        c.font = header_font(size=8)
+        c.fill = solid(RBC_MID_BLUE if i % 2 == 0 else RBC_BLUE)
+        c.alignment = center()
+        c.border = thin_border("thin", RBC_WHITE)
+        ws.column_dimensions[get_column_letter(col)].width = MONTH_COL_WIDTHS[j]
+
+
+# ── DATA ROWS ────────────────────────────────────────────────────────────────
+DATA_START_ROW = 4
+for ri, d in enumerate(deliverables):
+    row_num = DATA_START_ROW + ri
+    is_alt = ri % 2 == 1
+    row_fill = solid(RBC_LIGHT_BLUE if is_alt else RBC_WHITE)
+    ws.row_dimensions[row_num].height = 18
+
+    # Static columns
+    static_vals = [d["name"], d["frequency"], d["timing"], d["owner"], d["gv_raw"]]
+    for ci, val in enumerate(static_vals, start=1):
+        c = ws.cell(row=row_num, column=ci, value=val)
+        c.font = cell_font(size=9, bold=(ci == 1))
+        c.fill = solid(RBC_NAVY) if ci == 1 else row_fill
+        c.alignment = left() if ci == 1 else center()
+        c.border = thin_border("thin")
+        if ci == 1:
+            c.font = Font(name=FONT_MAIN, size=9, bold=True, color=RBC_WHITE)
+
+    # Month columns
+    gv_num = gv_day_to_number(d["gv_raw"])
+    for mi, m in enumerate(months):
+        col_base = STATIC_COUNT + 1 + mi * MONTH_COLS
+        due_date = nth_business_day(m.year, m.month, gv_num) if gv_num else None
+
+        # Preparer
+        c = ws.cell(row=row_num, column=col_base, value=d["preparer"])
+        c.font = cell_font(8); c.fill = row_fill; c.alignment = center(); c.border = thin_border("thin")
+
+        # Reviewed By
+        c = ws.cell(row=row_num, column=col_base + 1, value=d["reviewed_by"])
+        c.font = cell_font(8); c.fill = row_fill; c.alignment = center(); c.border = thin_border("thin")
+
+        # Distributed Date (blank — user fills in)
+        c = ws.cell(row=row_num, column=col_base + 2, value="")
+        c.font = cell_font(8); c.fill = row_fill; c.alignment = center(); c.border = thin_border("thin")
+        c.number_format = "MM/DD/YY"
+
+        # Due Date — store as actual date object so Excel recognizes it for CF formulas
+        if due_date:
+            c = ws.cell(row=row_num, column=col_base + 3, value=due_date)
+            c.number_format = "M/D/YY"
+            c.font = Font(name=FONT_MAIN, size=8, bold=True, color="1F1F1F")
+        else:
+            label = "N/A" if not gv_num else "flexible"
+            c = ws.cell(row=row_num, column=col_base + 3, value=label)
+            c.font = Font(name=FONT_MAIN, size=8, bold=True, color="888888")
+
+        c.fill = row_fill
+        c.alignment = center()
+        c.border = thin_border("thin")
+
+
+# ── STATIC DUE-DATE CELL COLORING (snapshot at build time) ──────────────────
+today = date.today()
+for ri in range(len(deliverables)):
+    row_num = DATA_START_ROW + ri
+    d = deliverables[ri]
+    gv_num = gv_day_to_number(d["gv_raw"])
+    for mi, m in enumerate(months):
+        col_base = STATIC_COUNT + 1 + mi * MONTH_COLS
+        due_date = nth_business_day(m.year, m.month, gv_num) if gv_num else None
+        if due_date is None:
+            continue
+        due_cell = ws.cell(row=row_num, column=col_base + 3)
+        if today > due_date:
+            due_cell.fill = solid(STATUS_RED)
+            due_cell.font = Font(name=FONT_MAIN, size=8, bold=True, color=RBC_WHITE)
+        elif (due_date - today).days <= 3:
+            due_cell.fill = solid(STATUS_YELLOW)
+            due_cell.font = Font(name=FONT_MAIN, size=8, bold=True, color="1F1F1F")
+        else:
+            due_cell.fill = solid(STATUS_GREEN)
+            due_cell.font = Font(name=FONT_MAIN, size=8, bold=True, color=RBC_WHITE)
+
+
+# ── EXCEL CONDITIONAL FORMATTING on Distributed Date cols ────────────────────
+red_fill = PatternFill("solid", fgColor=STATUS_RED)
+yellow_fill = PatternFill("solid", fgColor=STATUS_YELLOW)
+green_fill = PatternFill("solid", fgColor=STATUS_GREEN)
+red_font = Font(name=FONT_MAIN, bold=True, color=RBC_WHITE, size=8)
+yellow_font = Font(name=FONT_MAIN, bold=True, color="1F1F1F", size=8)
+green_font = Font(name=FONT_MAIN, bold=True, color=RBC_WHITE, size=8)
+
+for mi, m in enumerate(months):
+    col_base = STATIC_COUNT + 1 + mi * MONTH_COLS
+    dist_col = col_base + 2
+    due_col_num = col_base + 3
+    dist_letter = get_column_letter(dist_col)
+    due_letter = get_column_letter(due_col_num)
+    row_start = DATA_START_ROW
+    row_end = DATA_START_ROW + len(deliverables) - 1
+    cell_range = f"{dist_letter}{row_start}:{dist_letter}{row_end}"
+    first_dist = f"{dist_letter}{row_start}"
+    first_due = f"{due_letter}{row_start}"
+
+    # Rule 1 (highest priority): GREEN — distributed date filled in
+    ws.conditional_formatting.add(cell_range, FormulaRule(
+        formula=[f'NOT(ISBLANK({first_dist}))'],
+        fill=green_fill, font=green_font, stopIfTrue=True
+    ))
+
+    # Rule 2: RED — blank AND today past the due date
+    ws.conditional_formatting.add(cell_range, FormulaRule(
+        formula=[f'AND(ISBLANK({first_dist}),ISNUMBER({first_due}),TODAY()>{first_due})'],
+        fill=red_fill, font=red_font, stopIfTrue=True
+    ))
+
+    # Rule 3: YELLOW — blank AND due within 3 days
+    ws.conditional_formatting.add(cell_range, FormulaRule(
+        formula=[f'AND(ISBLANK({first_dist}),ISNUMBER({first_due}),TODAY()<={first_due},({first_due}-TODAY())<=3)'],
+        fill=yellow_fill, font=yellow_font, stopIfTrue=True
+    ))
+
+
+# ── STATUS LEGEND ────────────────────────────────────────────────────────────
+legend_row = DATA_START_ROW + len(deliverables) + 2
+ws.merge_cells(start_row=legend_row, start_column=1, end_row=legend_row, end_column=STATIC_COUNT)
+lbl = ws.cell(row=legend_row, column=1, value="LEGEND")
+lbl.font = Font(name=FONT_MAIN, size=9, bold=True, color=RBC_WHITE)
+lbl.fill = solid(RBC_NAVY)
+lbl.alignment = center()
+
+legend_items = [
+    (STATUS_GREEN, RBC_WHITE, "Distributed"),
+    (STATUS_YELLOW, "1F1F1F", "Due in 3 days or fewer"),
+    (STATUS_RED, RBC_WHITE, "Overdue — not distributed"),
+    (STATUS_GREY, "1F1F1F", "N/A or flexible schedule"),
+]
+for li, (bg, fg, text) in enumerate(legend_items):
+    r = legend_row + 1 + li
+    ws.row_dimensions[r].height = 15
+    c = ws.cell(row=r, column=1, value=text)
+    c.font = Font(name=FONT_MAIN, size=8, bold=True, color=fg)
+    c.fill = solid(bg)
+    c.alignment = left()
+    c.border = thin_border("thin")
+
+
+# ── FREEZE PANES ─────────────────────────────────────────────────────────────
+ws.freeze_panes = ws.cell(row=DATA_START_ROW, column=STATIC_COUNT + 1)
+
+
+# ── AUTO-FILTER ──────────────────────────────────────────────────────────────
+last_col_letter = get_column_letter(TOTAL_COLS)
+ws.auto_filter.ref = f"A3:{last_col_letter}3"
+
+
+# ── PRINT SETTINGS ───────────────────────────────────────────────────────────
+ws.page_setup.orientation = "landscape"
+ws.page_setup.fitToPage = True
+ws.page_setup.fitToWidth = 1
+ws.sheet_view.showGridLines = False
+
+
+# ── SAVE ─────────────────────────────────────────────────────────────────────
+print("Saving…")
+wb.save(FILE_PATH)
+print(f"Done. File saved to: {FILE_PATH}")
+
+print("\nNotes:")
+print("  - Distributed Date column: fill in dates as reports go out -> cell turns GREEN")
+print("  - Due Date column: RED=overdue, YELLOW=due soon (<=3 days), GREEN=upcoming")
+print("  - Preparer defaults to Owner — update manually as needed")
+print("  - Reviewed By column is blank — fill in as appropriate")
