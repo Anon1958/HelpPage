@@ -18,6 +18,7 @@ Usage:
 
 import re
 from datetime import date, timedelta
+
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import FormulaRule
@@ -46,32 +47,26 @@ FONT_MAIN = "Arial"
 # Quarter-end months (calendar year quarters)
 QUARTER_END_MONTHS = {3, 6, 9, 12}
 
-
 # ── HELPERS ──────────────────────────────────────────────────────────────────
+
 def solid(hex_color):
     return PatternFill("solid", fgColor=hex_color)
-
 
 def thin_border(style="thin", color="BFBFBF"):
     s = Side(style=style, color=color)
     return Border(left=s, right=s, top=s, bottom=s)
 
-
 def header_font(size=10, bold=True, color=RBC_WHITE):
     return Font(name=FONT_MAIN, size=size, bold=bold, color=color)
-
 
 def cell_font(size=9, bold=False, color="1F1F1F"):
     return Font(name=FONT_MAIN, size=size, bold=bold, color=color)
 
-
 def center():
     return Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-
 def left():
     return Alignment(horizontal="left", vertical="center", wrap_text=True)
-
 
 def build_month_range(history=3, forward=5):
     """Return month-start dates: N history months + current month + N forward months."""
@@ -93,7 +88,6 @@ def build_month_range(history=3, forward=5):
             y += 1
     return months
 
-
 def gv_day_to_number(gv_str):
     if not gv_str:
         return None
@@ -105,7 +99,6 @@ def gv_day_to_number(gv_str):
     if match:
         return int(match.group(1))
     return None
-
 
 def nth_business_day(year, month, n):
     if n is None:
@@ -121,7 +114,6 @@ def nth_business_day(year, month, n):
         if d.month != month:
             return None
 
-
 def is_quarterly(freq_str):
     """Return True if frequency indicates quarterly."""
     if not freq_str:
@@ -129,13 +121,11 @@ def is_quarterly(freq_str):
     f = freq_str.strip().lower()
     return "quarter" in f or f == "q" or f == "qtr"
 
-
 def replace_katie(val):
     """Replace any occurrence of Katie (case-insensitive) with Brian."""
     if not val:
         return val
     return re.sub(r'\bKatie\b', 'Brian', str(val), flags=re.IGNORECASE)
-
 
 def should_remove(name):
     """Return True if this deliverable should be removed."""
@@ -143,12 +133,12 @@ def should_remove(name):
         return False
     return "aipi" in name.strip().lower()
 
-
 # ── READ EXISTING DATA ───────────────────────────────────────────────────────
 print("Loading workbook…")
 wb = load_workbook(FILE_PATH)
 if TAB_NAME not in wb.sheetnames:
     raise ValueError(f"Sheet '{TAB_NAME}' not found. Available: {wb.sheetnames}")
+
 src = wb[TAB_NAME]
 
 # The v1 rebuilt sheet has:
@@ -202,7 +192,6 @@ print(f"Loaded {len(deliverables)} deliverables (after removals).")
 if not deliverables:
     raise ValueError("No deliverables found after filtering.")
 
-
 # ── DELETE OLD SHEET, CREATE FRESH ───────────────────────────────────────────
 del wb[TAB_NAME]
 ws = wb.create_sheet(TAB_NAME)
@@ -215,8 +204,7 @@ if "Done" in wb.sheetnames:
     if offset > 0:
         wb.move_sheet(TAB_NAME, offset=offset - 1)
 
-
-# ── COLUMN LAYOUT ────────────────────────────────────────────────────────────
+# ── COLUMN LAYOUT ─────────────────────────────────────────────────────────────
 # Static cols: Name | Frequency | Owner | GV Day (Timing removed per Eric)
 STATIC_COLS = ["Name", "Frequency", "Owner", "GV Day"]
 COL_WIDTHS = [35, 14, 14, 10]
@@ -226,14 +214,11 @@ MONTH_COL_LABELS = ["Preparer", "Reviewed By", "Distributed Date", "Due Date"]
 MONTH_COL_WIDTHS = [14, 14, 16, 12]
 
 months = build_month_range(HISTORY_MONTHS, FORWARD_MONTHS)
-
 STATIC_COUNT = len(STATIC_COLS)
 MONTH_COLS = len(MONTH_COL_LABELS)
 TOTAL_COLS = STATIC_COUNT + MONTH_COLS * len(months)
-
 today = date.today()
 current_month_start = date(today.year, today.month, 1)
-
 
 # ── ROW 1: TITLE BANNER ─────────────────────────────────────────────────────
 ws.row_dimensions[1].height = 28
@@ -242,7 +227,6 @@ title_cell = ws.cell(row=1, column=1, value="RECURRING DELIVERABLES TRACKER")
 title_cell.font = Font(name=FONT_MAIN, size=14, bold=True, color=RBC_WHITE)
 title_cell.fill = solid(RBC_NAVY)
 title_cell.alignment = center()
-
 
 # ── ROW 2: MONTH SPAN HEADERS ────────────────────────────────────────────────
 ws.row_dimensions[2].height = 22
@@ -277,9 +261,9 @@ for i, m in enumerate(months):
     else:
         mc.fill = solid(RBC_BLUE if i % 2 == 0 else RBC_NAVY)
 
-
-# ── ROW 3: COLUMN HEADERS ───────────────────────────────────────────────────
+# ── ROW 3: COLUMN HEADERS ─────────────────────────────────────────────────────
 ws.row_dimensions[3].height = 36
+
 for ci, label in enumerate(STATIC_COLS, start=1):
     c = ws.cell(row=3, column=ci, value=label)
     c.font = header_font(size=9)
@@ -298,8 +282,7 @@ for i in range(len(months)):
         c.border = thin_border("thin", RBC_WHITE)
         ws.column_dimensions[get_column_letter(col)].width = MONTH_COL_WIDTHS[j]
 
-
-# ── DATA ROWS ────────────────────────────────────────────────────────────────
+# ── DATA ROWS ─────────────────────────────────────────────────────────────────
 DATA_START_ROW = 4
 
 for ri, d in enumerate(deliverables):
@@ -369,9 +352,9 @@ for ri, d in enumerate(deliverables):
             c = ws.cell(row=row_num, column=col_base + 3, value=label)
             c.font = Font(name=FONT_MAIN, size=8, bold=True, color="888888")
             c.fill = row_fill
+
         c.alignment = center()
         c.border = thin_border("thin")
-
 
 # ── STATIC DUE-DATE CELL COLORING ────────────────────────────────────────────
 for ri in range(len(deliverables)):
@@ -399,11 +382,11 @@ for ri in range(len(deliverables)):
             due_cell.fill = solid(STATUS_GREEN)
             due_cell.font = Font(name=FONT_MAIN, size=8, bold=True, color=RBC_WHITE)
 
-
-# ── EXCEL CONDITIONAL FORMATTING on Distributed Date cols ────────────────────
+# ── EXCEL CONDITIONAL FORMATTING on Distributed Date cols ──────────────────────
 red_fill = PatternFill("solid", fgColor=STATUS_RED)
 yellow_fill = PatternFill("solid", fgColor=STATUS_YELLOW)
 green_fill = PatternFill("solid", fgColor=STATUS_GREEN)
+
 red_font = Font(name=FONT_MAIN, bold=True, color=RBC_WHITE, size=8)
 yellow_font = Font(name=FONT_MAIN, bold=True, color="1F1F1F", size=8)
 green_font = Font(name=FONT_MAIN, bold=True, color=RBC_WHITE, size=8)
@@ -414,7 +397,6 @@ for mi, m in enumerate(months):
     due_col_num = col_base + 3
     dist_letter = get_column_letter(dist_col)
     due_letter = get_column_letter(due_col_num)
-
     row_start = DATA_START_ROW
     row_end = DATA_START_ROW + len(deliverables) - 1
     cell_range = f"{dist_letter}{row_start}:{dist_letter}{row_end}"
@@ -426,21 +408,18 @@ for mi, m in enumerate(months):
         formula=[f'NOT(ISBLANK({first_dist}))'],
         fill=green_fill, font=green_font, stopIfTrue=True
     ))
-
     # RED — blank AND today past the due date
     ws.conditional_formatting.add(cell_range, FormulaRule(
         formula=[f'AND(ISBLANK({first_dist}),ISNUMBER({first_due}),TODAY()>{first_due})'],
         fill=red_fill, font=red_font, stopIfTrue=True
     ))
-
     # YELLOW — blank AND due within 3 days
     ws.conditional_formatting.add(cell_range, FormulaRule(
         formula=[f'AND(ISBLANK({first_dist}),ISNUMBER({first_due}),TODAY()<={first_due},({first_due}-TODAY())<=3)'],
         fill=yellow_fill, font=yellow_font, stopIfTrue=True
     ))
 
-
-# ── STATUS LEGEND ────────────────────────────────────────────────────────────
+# ── STATUS LEGEND ─────────────────────────────────────────────────────────────
 legend_row = DATA_START_ROW + len(deliverables) + 2
 ws.merge_cells(start_row=legend_row, start_column=1, end_row=legend_row, end_column=STATIC_COUNT)
 lbl = ws.cell(row=legend_row, column=1, value="LEGEND")
@@ -463,24 +442,20 @@ for li, (bg, fg, text) in enumerate(legend_items):
     c.alignment = left()
     c.border = thin_border("thin")
 
-
-# ── FREEZE PANES ─────────────────────────────────────────────────────────────
+# ── FREEZE PANES ──────────────────────────────────────────────────────────────
 ws.freeze_panes = ws.cell(row=DATA_START_ROW, column=STATIC_COUNT + 1)
 
-
-# ── AUTO-FILTER ──────────────────────────────────────────────────────────────
+# ── AUTO-FILTER ───────────────────────────────────────────────────────────────
 last_col_letter = get_column_letter(TOTAL_COLS)
 ws.auto_filter.ref = f"A3:{last_col_letter}3"
 
-
-# ── PRINT SETTINGS ───────────────────────────────────────────────────────────
+# ── PRINT SETTINGS ────────────────────────────────────────────────────────────
 ws.page_setup.orientation = "landscape"
 ws.page_setup.fitToPage = True
 ws.page_setup.fitToWidth = 1
 ws.sheet_view.showGridLines = False
 
-
-# ── SAVE ─────────────────────────────────────────────────────────────────────
+# ── SAVE ──────────────────────────────────────────────────────────────────────
 print("Saving…")
 wb.save(FILE_PATH)
 print(f"Done. File saved to: {FILE_PATH}")
